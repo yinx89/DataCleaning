@@ -1,0 +1,111 @@
+---
+title: "PRACTICA 2: LIMPIEZA Y VALIDACIÓN DE LOS DATOS"
+author: "Gines Molina e Iñigo Alvarez"
+date: "29/12/2020"
+output:
+  html_document:
+    highlight: default
+    number_sections: yes
+    theme: cosmo
+    toc: yes
+    toc_depth: 2
+  word_document: default
+  pdf_document:
+    highlight: zenburn
+    toc: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# 1. Descripción del dataset
+
+El dataset es un listado de ofertas de trabajo publicadas en Linkedin para ciencia de datos (térnimo "Data Scientist") que fue obtenido en la primera parte de esta práctica.
+
+Consta de 6 archivos CSV con las ofertas encontradas a nivel de Escocia, Reino Unido, España, Mundo y remoto.
+
+# 2. Integración y selección de los datos de interés a analizar
+
+El primer paso es integrar los distintos archivos en un mismo dataset.
+
+```{r}
+Scotland <- read.csv("Scotland.csv", header=TRUE, sep=",", stringsAsFactors=FALSE)
+Spain <- read.csv("Spain.csv", header=TRUE, sep=",", stringsAsFactors=FALSE)
+UK <- read.csv("UK.csv", header=TRUE, sep=",", stringsAsFactors=FALSE)
+WorldWide <- read.csv("WorldWide.csv", header=TRUE, sep=",", stringsAsFactors=FALSE)
+Remote <- read.csv("Remote.csv", header=TRUE, sep=",", stringsAsFactors=FALSE)
+jobs <- rbind(Scotland, Spain, UK, WorldWide, Remote)
+```
+
+```{r}
+str(jobs)
+```
+
+Quitamos la primera columna ya que no es más que un índice que no aporta ninguna información.
+
+```{r}
+jobs <- jobs[2:17]
+```
+
+Cambiamos a numéricas las columnas que deberían ser de este tipo pero se ven como "character".
+
+# 3. Limpieza de los datos
+
+Al haber integrado varios archivos de búsquedas de ámbitos territoriales que se solapan lo primero es eliminar las posibles duplicidades que podamos encontrar.
+
+```{r}
+sum(duplicated(jobs))
+```
+
+Hay `r sum(duplicated(wines))` observaciones duplicadas así que las eliminamos.
+
+```{r}
+jobs <- distinct(jobs)
+```
+
+# 3.1. Valores perdidos
+
+Buscamos valores perdidos.
+```{r}
+sum(is.na(jobs))
+sum(jobs=="")
+sum(jobs=="None")
+```
+
+Suistituimos los valores en blanco por NA.
+
+```{r}
+jobs[jobs==""] <-- NA
+jobs[jobs=="None"] <-- NA
+```
+
+
+Corregimos los tipos de los datos.
+```{r}
+jobs$Date <- as.Date(jobs$Date, format="%Y-%m-%d")
+jobs$Solicitudes <- as.numeric(jobs$Solicitudes)
+jobs$Visualizaciones <- as.numeric(jobs$Visualizaciones)
+sum(is.na(jobs))
+```
+
+Mostramos la distribución de los valores perdidos.
+```{r}
+library(VIM)
+aggr(jobs, numbers=TRUE, sortVars=TRUE, labels=names(jobs),
+cex.axis=.7, gap=3, ylab=c("Missing data","Pattern"))
+```
+
+```{r}
+summary(jobs)
+```
+
+
+```{r}
+head(jobs, 10)
+```
+
+```{r}
+tail(jobs, 10)
+```
+
