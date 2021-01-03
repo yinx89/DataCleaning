@@ -19,6 +19,11 @@ output:
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+```{r 1, message=FALSE, warning=FALSE}
+#cargamos los paquetes que voy a usar
+library(dplyr)
+```
+
 # 1. Descripción del dataset
 
 El dataset es un listado de ofertas de trabajo publicadas en Linkedin para ciencia de datos (térnimo "Data Scientist") que fue obtenido en la primera parte de esta práctica.
@@ -48,7 +53,23 @@ Quitamos la primera columna ya que no es más que un índice que no aporta ningu
 jobs <- jobs[2:17]
 ```
 
-Cambiamos a numéricas las columnas que deberían ser de este tipo pero se ven como "character".
+Para corrgir los tipos de datos vamos a ver qué variables se podrían convertir a tipo factor.
+```{r}
+sapply(jobs, function(x) length(unique(x)))
+```
+
+
+Corregimos los tipos de los datos.
+```{r}
+jobs$Date <- as.Date(jobs$Date, format="%Y-%m-%d")
+jobs$Solicitudes <- as.numeric(jobs$Solicitudes)
+jobs$Visualizaciones <- as.numeric(jobs$Visualizaciones)
+jobs$Level <- as.factor(jobs$Level)
+jobs$Type <- as.factor(jobs$Type)
+jobs$Empleados <- as.factor(jobs$Empleados)
+jobs$Quick.Application <- as.factor(jobs$Quick.Application)
+jobs$Recommended.Flavor <- as.factor(jobs$Recommended.Flavor)
+```
 
 # 3. Limpieza de los datos
 
@@ -81,13 +102,7 @@ jobs[jobs=="None"] <-- NA
 ```
 
 
-Corregimos los tipos de los datos.
-```{r}
-jobs$Date <- as.Date(jobs$Date, format="%Y-%m-%d")
-jobs$Solicitudes <- as.numeric(jobs$Solicitudes)
-jobs$Visualizaciones <- as.numeric(jobs$Visualizaciones)
-sum(is.na(jobs))
-```
+
 
 Mostramos la distribución de los valores perdidos.
 ```{r}
@@ -98,6 +113,14 @@ cex.axis=.7, gap=3, ylab=c("Missing data","Pattern"))
 
 ```{r}
 summary(jobs)
+```
+
+```{r}
+library(gridExtra)
+grid.arrange(
+  boxplot(jobs$Solicitudes),
+  boxplot(jobs$Visualizaciones),
+ncol=2)
 ```
 
 
