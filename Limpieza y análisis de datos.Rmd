@@ -22,6 +22,8 @@ knitr::opts_chunk$set(echo = TRUE)
 ```{r 1, message=FALSE, warning=FALSE}
 #cargamos los paquetes que voy a usar
 library(dplyr)
+library(VIM)
+library(ggplot2)
 ```
 
 # 1. Descripción del dataset
@@ -102,21 +104,97 @@ jobs$Recommended.Flavor <- as.factor(jobs$Recommended.Flavor)
 ```
 
 Mostramos la distribución de los valores perdidos.
-```{r}
-library(VIM)
+```{r warning=FALSE}
+sum(is.na(jobs))
 aggr(jobs, numbers=TRUE, sortVars=TRUE, labels=names(jobs),
 cex.axis=.7, gap=3, ylab=c("Missing data","Pattern"))
 ```
 
 ```{r}
-summary(jobs)
+#library(randomForest)
+#jobs <- rfImpute(Level ~ Empleados, data=jobs)
+#na.roughfix(jobs["Recommended.Flavor"])
+#rfImpute(Level ~ Empleados, data=jobs)
+jobs <- jobs %>%
+  group_by(Level, Quick.Application) %>%
+    mutate(Empleados = ifelse(is.na(Empleados), which.max(Empleados), Empleados))
+jobs <- jobs %>%
+  group_by(Level, Quick.Application) %>%
+    mutate(Recommended.Flavor = ifelse(is.na(Recommended.Flavor), which.max(Recommended.Flavor), Recommended.Flavor))
+jobs <- jobs %>%
+  group_by(Level, Quick.Application) %>%
+    mutate(Solicitudes = ifelse(is.na(Solicitudes), median(Solicitudes, na.rm = TRUE), Solicitudes))
+jobs <- jobs %>%
+  group_by(Level, Quick.Application) %>%
+    mutate(Visualizaciones = ifelse(is.na(Visualizaciones), median(Visualizaciones, na.rm = TRUE), Visualizaciones))
+```
+
+
+
+Comprobamos cómo quedan ahora los valores perdidos.
+```{r warning=FALSE}
+sum(is.na(jobs))
+aggr(jobs, numbers=TRUE, sortVars=TRUE, labels=names(jobs),
+cex.axis=.7, gap=3, ylab=c("Missing data","Pattern"))
+```
+
+Los valores perdidos se han reducido casi a la mitad y los que quedan se dejan así.
+
+```{r message=FALSE, warning=FALSE}
+library(ggplot2)
+grid.arrange(
+  qplot(Date, data=jobs)+ theme(axis.text.x = element_text(angle = 25)),
+  qplot(Level, data=jobs)+ theme(axis.text.x = element_text(angle = 20, hjust=0.7)),
+  qplot(Type, data=jobs)+ theme(axis.text.x = element_text(angle = 20, hjust=1)),
+  qplot(Solicitudes, data=jobs),
+  qplot(Empleados, data=jobs),
+  qplot(Visualizaciones, data=jobs),
+  qplot(Recommended.Flavor, data=jobs)
+)
+```
+
+Hacemos un boxplot para cada una de las variables numéricas.
+```{r}
+ggplot(jobs, aes(x=Level, y=Solicitudes, color=Level)) + 
+  ggtitle("Diagrama de cajas") + 
+  scale_color_brewer(palette="Dark2") +
+  geom_boxplot() +
+  theme(legend.position = "null") +
+  geom_jitter(width = 0.1)
+
+ggplot(jobs, aes(x=Level, y=Visualizaciones, color=Level)) + 
+  ggtitle("Diagrama de cajas") + 
+  scale_color_brewer(palette="Dark2") +
+  geom_boxplot() +
+  theme(legend.position = "null") +
+  geom_jitter(width = 0.1)
 ```
 
 ```{r}
-boxplot(jobs$Solicitudes)
-boxplot(jobs$Visualizaciones)
+tail(sort(boxplot.stats(jobs$Solicitudes)$out),5)
 ```
 
+Voy a observar las tres ofertas de trabajo que superan las 3000 solicitudes.
+```{r}
+jobs[which(jobs$Solicitudes %in% tail(sort(boxplot.stats(jobs$Solicitudes)$out),3)),]
+```
+
+Aunque puede que sean valores razonables, a modo de ejemplo, eliminamos las 3 ofertas de trabajo que superan las 3000 solicitudes y mostramos cómo queda ahora el gráfico de los boxplots.
+```{r}
+jobs <- jobs[-which(jobs$Solicitudes %in% tail(sort(boxplot.stats(jobs$Solicitudes)$out),3)),]
+
+ggplot(jobs, aes(x=Level, y=Solicitudes, color=Level)) + 
+  ggtitle("Diagrama de cajas") + 
+  scale_color_brewer(palette="Dark2") +
+  geom_boxplot() +
+  theme(legend.position = "null") +
+  geom_jitter(width = 0.1)
+```
+
+
+```{r}
+summary(jobs)
+```
 
 ```{r}
 head(jobs, 10)
