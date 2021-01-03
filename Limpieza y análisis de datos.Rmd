@@ -42,6 +42,11 @@ Spain <- read.csv("Spain.csv", header=TRUE, sep=",", stringsAsFactors=FALSE)
 UK <- read.csv("UK.csv", header=TRUE, sep=",", stringsAsFactors=FALSE)
 WorldWide <- read.csv("WorldWide.csv", header=TRUE, sep=",", stringsAsFactors=FALSE)
 Remote <- read.csv("Remote.csv", header=TRUE, sep=",", stringsAsFactors=FALSE)
+Scotland$dataset <- "Scotland"
+Spain$dataset <- "Spain"
+UK$dataset <- "UK"
+WorldWide$dataset <- "WorldWide"
+Remote$dataset <- "Remote"
 jobs <- rbind(Scotland, Spain, UK, WorldWide, Remote)
 ```
 
@@ -52,7 +57,7 @@ str(jobs)
 Quitamos la primera columna ya que no es más que un índice que no aporta ninguna información.
 
 ```{r}
-jobs <- jobs[2:17]
+jobs <- jobs[2:18]
 ```
 
 # 3. Limpieza de los datos
@@ -60,13 +65,14 @@ jobs <- jobs[2:17]
 Al haber integrado varios archivos de búsquedas de ámbitos territoriales que se solapan lo primero es eliminar las posibles duplicidades que podamos encontrar.
 
 ```{r}
-sum(duplicated(jobs))
+sum(duplicated(jobs[1:5]))
 ```
 
-Hay `r sum(duplicated(wines))` observaciones duplicadas así que las eliminamos.
+Hay `r sum(duplicated(jobs[1:16]))` observaciones duplicadas así que las eliminamos.
 
 ```{r}
-jobs <- distinct(jobs)
+jobs <- jobs %>% 
+  distinct(Job.ID, Company.Name, Location, .keep_all = TRUE)
 ```
 
 # 3.1. Valores perdidos
@@ -101,7 +107,19 @@ jobs$Type <- as.factor(jobs$Type)
 jobs$Empleados <- as.factor(jobs$Empleados)
 jobs$Quick.Application <- as.factor(jobs$Quick.Application)
 jobs$Recommended.Flavor <- as.factor(jobs$Recommended.Flavor)
+jobs$dataset <- as.factor(jobs$dataset)
 ```
+
+Nos quedamos solo con las ofertas publicadas a partir de
+```{r}
+jobs <- jobs %>% 
+  filter(Date >= "2020-10-01")
+```
+
+```{r}
+nrow(jobs)
+```
+
 
 Mostramos la distribución de los valores perdidos.
 ```{r warning=FALSE}
@@ -128,8 +146,6 @@ jobs <- jobs %>%
   group_by(Level, Quick.Application) %>%
     mutate(Visualizaciones = ifelse(is.na(Visualizaciones), median(Visualizaciones, na.rm = TRUE), Visualizaciones))
 ```
-
-
 
 Comprobamos cómo quedan ahora los valores perdidos.
 ```{r warning=FALSE}
@@ -191,6 +207,16 @@ ggplot(jobs, aes(x=Level, y=Solicitudes, color=Level)) +
   geom_jitter(width = 0.1)
 ```
 
+# 4. Análisis de los datos.
+
+## 4.3 Regresión logistica
+
+```{r}
+lgm <- glm(formula = Quick.Application ~ Solicitudes + Level + Recommended.Flavor, family = binomial(link=logit), data = jobs)
+lgm
+```
+
+$${logit}(p_i)=\ln\left(\frac{p_i}{1-p_i}\right) = `r round(lgm_$coefficients[1],2)` `r round(lgm_$coefficients[2],2)`x_1 + `r round(lgm_$coefficients[3],2)`x_2 `r round(lgm_$coefficients[4],2)`x_3$$
 
 ```{r}
 summary(jobs)
