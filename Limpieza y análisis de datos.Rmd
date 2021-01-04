@@ -48,11 +48,11 @@ Consta de 6 archivos CSV con las ofertas encontradas a nivel de Escocia, Reino U
 El primer paso es integrar los distintos archivos en un mismo dataset.
 
 ```{r}
-Scotland <- read.csv("Scotland.csv", header=TRUE, sep=",", stringsAsFactors=FALSE)
-Spain <- read.csv("Spain.csv", header=TRUE, sep=",", stringsAsFactors=FALSE)
-UK <- read.csv("UK.csv", header=TRUE, sep=",", stringsAsFactors=FALSE)
-WorldWide <- read.csv("WorldWide.csv", header=TRUE, sep=",", stringsAsFactors=FALSE)
-Remote <- read.csv("Remote.csv", header=TRUE, sep=",", stringsAsFactors=FALSE)
+Scotland <- read.csv("data/Scotland.csv", header=TRUE, sep=",", stringsAsFactors=FALSE)
+Spain <- read.csv("data/Spain.csv", header=TRUE, sep=",", stringsAsFactors=FALSE)
+UK <- read.csv("data/UK.csv", header=TRUE, sep=",", stringsAsFactors=FALSE)
+WorldWide <- read.csv("data/WorldWide.csv", header=TRUE, sep=",", stringsAsFactors=FALSE)
+Remote <- read.csv("data/Remote.csv", header=TRUE, sep=",", stringsAsFactors=FALSE)
 Scotland$dataset <- "Scotland"
 Spain$dataset <- "Spain"
 UK$dataset <- "UK"
@@ -86,7 +86,7 @@ jobs <- jobs %>%
   distinct(Job.ID, Company.Name, Location, .keep_all = TRUE)
 ```
 
-# 3.1. Valores perdidos
+## 3.1. Valores perdidos
 
 Buscamos valores perdidos.
 
@@ -123,7 +123,8 @@ jobs$Recommended.Flavor <- as.factor(jobs$Recommended.Flavor)
 jobs$dataset <- as.factor(jobs$dataset)
 ```
 
-Nos quedamos solo con las ofertas publicadas a partir de
+Nos quedamos solo con las ofertas publicadas a partir de...
+
 ```{r}
 jobs <- jobs %>% 
   filter(Date >= "2020-10-01")
@@ -135,6 +136,7 @@ nrow(jobs)
 
 
 Mostramos la distribución de los valores perdidos.
+
 ```{r warning=FALSE}
 sum(is.na(jobs))
 aggr(jobs, numbers=TRUE, sortVars=TRUE, labels=names(jobs),
@@ -170,7 +172,7 @@ cex.axis=.7, gap=3, ylab=c("Missing data","Pattern"))
 Los valores perdidos se han reducido casi a la mitad y los que quedan se dejan así.
 
 ```{r message=FALSE, warning=FALSE}
-library(ggplot2)
+library(gridExtra)
 grid.arrange(
   qplot(Date, data=jobs)+ theme(axis.text.x = element_text(angle = 25)),
   qplot(Level, data=jobs)+ theme(axis.text.x = element_text(angle = 20, hjust=0.7)),
@@ -183,6 +185,7 @@ grid.arrange(
 ```
 
 Hacemos un boxplot para cada una de las variables numéricas.
+
 ```{r}
 ggplot(jobs, aes(x=Level, y=Solicitudes, color=Level)) + 
   ggtitle("Diagrama de cajas") + 
@@ -204,11 +207,13 @@ tail(sort(boxplot.stats(jobs$Solicitudes)$out),5)
 ```
 
 Voy a observar las tres ofertas de trabajo que superan las 3000 solicitudes.
+
 ```{r}
 jobs[which(jobs$Solicitudes %in% tail(sort(boxplot.stats(jobs$Solicitudes)$out),3)),]
 ```
 
 Aunque puede que sean valores razonables, a modo de ejemplo, eliminamos las 3 ofertas de trabajo que superan las 3000 solicitudes y mostramos cómo queda ahora el gráfico de los boxplots.
+
 ```{r}
 jobs <- jobs[-which(jobs$Solicitudes %in% tail(sort(boxplot.stats(jobs$Solicitudes)$out),3)),]
 
@@ -222,7 +227,166 @@ ggplot(jobs, aes(x=Level, y=Solicitudes, color=Level)) +
 
 # 4. Análisis de los datos.
 
-## 4.3 Regresión logistica
+## 4.2. Comprobación de la normalidad y homogeneidad de la varianza.
+
+En el dataset se obtienen XX variables, XX categóricas y XX numéricas. En este apartado se busca verificar si las variables numéricas (lat, lon, Solicitudes y Visualizaciones) siguen una distribución normal.
+
+Para verificarlo, primero se realizará un estudio visual de la normalidad mediante la gráfica quantile-quantile (Q-Q) que dibuja la correlación entre una muestra dada y la distribución normal. En esta primera gráfica se podrá observar el grado de aproximación o similitud con la línea de referencia de 45 grados. Además, también se realizará el estudio visual sobre el histograma de la variable
+
+```{r}
+
+#TODO HACER PARA CADA DATASET
+
+# Comprobación de la normalidad para Remote
+
+# Esto se debera realizar en apartados anteriores
+Remote$Solicitudes <- as.numeric(Remote$Solicitudes)
+Remote$Visualizaciones <- as.numeric(Remote$Visualizaciones)
+Remote<-na.omit(Remote)
+# Nos quedamos solo con la latitud y la longitud. El resto de variables de OSM deberán ser eliminadas en apartados anteriores.
+# Tambien se deberia haber mezclado los dataframe de latitud y longitud en el original.
+
+par(mfrow=c(2,2))
+for(i in 1:ncol(Remote)) {
+  if (is.numeric(Remote[,i])){
+    qqnorm(Remote[,i],main = paste("Normal Q-Q Plot for ",colnames(Remote)[i]))
+    qqline(Remote[,i],col="red")
+    hist(Remote[,i],
+      main=paste("Histogram for ", colnames(Remote)[i]),
+      xlab=colnames(Remote)[i], freq = FALSE)
+  }
+}
+
+```
+
+No parece que las gráficas representen que claramente las variables siguen una distribución normal. Para verificarlo, a continuación se realiza la comprobación mediante el test de Shapiro-Wilk y así no dar lugar a errores.
+
+```{r}
+
+for(i in 1:ncol(Remote)) {
+  if (is.numeric(Remote[,i])){
+    result <- shapiro.test(Remote[,i])
+    print(paste("Resultados para: ", colnames(Remote)[i]))
+    print(result)
+  }
+}
+```
+
+Se puede observar que a través de los test aplicados a las variables cuantitativas, el p-value es menor que 0.05, por lo que se deberá rechazar la hipótesis nula y aceptar que las variables no siguen una distribución normal. Por lo tanto, se deberán utlizar métodos para el análisis que no supongan que las variables cuantitativas siguen una distribución normal.
+
+No obstante, cuando el número de observaciones es mayor o igual a 30, como es el caso de estas variables cuantitativas y debido al teorema central del límite, se podrán utilizar pruebas paramétricas asumiendo que con un aumento de observaciones, la distribución se volvería normal y en forma de campana. Así las variables se podrían aproximar como una distribución normal de media 0 y desviación estándar 1.
+
+A continuación, se lleva a cabo la comprobación de homogeneidad de las varianzas. Se utilizará el test de Flinge-Killneen que resulta apropiado para variables no paramétricas que no siguen una distribución normal.
+
+```{r}
+
+fligner.test(Visualizaciones ~ lat, Remote)
+fligner.test(Visualizaciones ~ lon, Remote)
+fligner.test(Solicitudes ~ lat, Remote)
+fligner.test(Solicitudes ~ lon, Remote)
+fligner.test(Visualizaciones ~ Solicitudes, Remote)
+
+```
+
+Se obtiene como resultado que las variables numéricas no son homogéneas según su varianza ya que en todos estos test se consigue un p-value menor de 0.05. Se deberá tener en cuenta para la aplicación de métodos analíticos que asuman homogeneidad de las varianzas.
+
+## 4.3 Aplicación de pruebas estadísticas para comparar los grupos de datos.
+
+En función de los datos y el objetivo del estudio, aplicar pruebas de contraste de hipótesis, correlaciones, regresiones, etc. Aplicar al menos tres métodos de análisis diferentes.
+
+### 4.3.1 Grado de independencia y predictividad sobre la variable "Solicitudes".
+
+```{r}
+# Eliminar columnas dataframe
+
+borrar <- c("lat_min","lat_max","lon_min","lon_max","X")
+Remote <- Remote[ , !(names(Remote) %in% borrar)]
+str(Remote)
+
+corr_matrix <- matrix(nc = 2, nr = 0)
+colnames(corr_matrix) <- c("estimate", "p-value")
+# Calcular el coeficiente de correlación para cada variable cuantitativa
+# con respecto al campo "precio"
+Remote[,length(Remote)]
+for (i in 1:(ncol(Remote) - 1)) {
+  if (is.integer(Remote[,i]) | is.numeric(Remote[,i])) {
+    spearman_test = cor.test(Remote[,i],Remote$Visualizaciones,method = "spearman")
+    corr_coef = spearman_test$estimate
+    p_val = spearman_test$p.value
+    # Add row to matrix
+    pair = matrix(ncol = 2, nrow = 1)
+    pair[1][1] = corr_coef
+    pair[2][1] = p_val
+    corr_matrix <- rbind(corr_matrix, pair)
+    rownames(corr_matrix)[nrow(corr_matrix)] <- colnames(Remote)[i]
+  }
+}
+print(corr_matrix)
+
+anova_fare <- aov(lat ~ Solicitudes, Remote)
+summary(anova_fare)
+
+anova_age <- aov(lon ~ Solicitudes, Remote)
+summary(anova_age)
+
+```
+
+### 4.3.2 Modelo de regresión lineal
+
+```{r}
+
+remote_lat_positive<-Remote[which(Remote$lat>0),]
+ntrain <- nrow(remote_lat_positive)*0.8
+ntest <- nrow(remote_lat_positive)*0.2
+set.seed(12312)
+index_train<-sample(1:nrow(remote_lat_positive),size = ntrain)
+train<-remote_lat_positive[index_train,]
+test<-remote_lat_positive[-index_train,]
+modelo<-lm(formula = Solicitudes ~ lat + lon + Visualizaciones, data=train)
+summary(modelo)
+
+prob_sl<-predict(modelo, test, type="response")
+mc_sl<-data.frame(
+  real=test$Solicitudes,
+  predicted= prob_sl,
+  dif=ifelse(test$Solicitudes>prob_sl, -prob_sl*100/test$Solicitudes,prob_sl*100/test$Solicitudes)
+  )
+colnames(mc_sl)<-c("Real","Predecido","Dif%")
+knitr::kable(mc_sl)
+
+```
+
+
+```{r}
+library(magrittr)
+Remote %<>%
+  mutate(Date= as.Date(Date, format= "%Y-%m-%d"))
+Remote$Solicitudes <- as.numeric(Remote$Solicitudes)
+Remote$Visualizaciones <- as.numeric(Remote$Visualizaciones)
+WorldWide %<>%
+  mutate(Date= as.Date(Date, format= "%Y-%m-%d"))
+UK %<>%
+  mutate(Date= as.Date(Date, format= "%Y-%m-%d"))
+Spain %<>%
+  mutate(Date= as.Date(Date, format= "%Y-%m-%d"))
+Scotland %<>%
+  mutate(Date= as.Date(Date, format= "%Y-%m-%d"))
+
+Remote$Date[which(Remote$Date <= "2020-10-01")] <- NA
+
+Remote<-na.omit(Remote)
+
+hist(Remote$Date,"days")
+hist(Remote$Solicitudes)
+hist(Remote$Visualizaciones)
+hist(WorldWide$Date,"days")
+hist(UK$Date,"days")
+hist(Spain$Date,"days")
+hist(Scotland$Date,"days")
+
+```
+
+## 4.3.3 Modelo de Regresión logistica
 
 ```{r}
 lgm <- glm(formula = Quick.Application ~ Solicitudes + Level + Recommended.Flavor, family = binomial(link=logit), data = jobs)
@@ -242,6 +406,8 @@ head(jobs, 10)
 ```{r}
 tail(jobs, 10)
 ```
+
+# 5. Representación de los resultados a partir de las tablas y gráficas.
 
 ```{r}
 world_map <- map_data("world")
@@ -432,164 +598,5 @@ p <- Remote %>%
     theme(legend.position = "none")
 p
 
-
-```
-
-## 4.2. Comprobación de la normalidad y homogeneidad de la varianza.
-
-En el dataset se obtienen XX variables, XX categóricas y XX numéricas. En este apartado se busca verificar si las variables numéricas (lat, lon, Solicitudes y Visualizaciones) siguen una distribución normal.
-
-Para verificarlo, primero se realizará un estudio visual de la normalidad mediante la gráfica quantile-quantile (Q-Q) que dibuja la correlación entre una muestra dada y la distribución normal. En esta primera gráfica se podrá observar el grado de aproximación o similitud con la línea de referencia de 45 grados. Además, también se realizará el estudio visual sobre el histograma de la variable
-
-```{r}
-
-#TODO HACER PARA CADA DATASET
-
-# Comprobación de la normalidad para Remote
-
-# Esto se debera realizar en apartados anteriores
-Remote$Solicitudes <- as.numeric(Remote$Solicitudes)
-Remote$Visualizaciones <- as.numeric(Remote$Visualizaciones)
-Remote<-na.omit(Remote)
-# Nos quedamos solo con la latitud y la longitud. El resto de variables de OSM deberán ser eliminadas en apartados anteriores.
-# Tambien se deberia haber mezclado los dataframe de latitud y longitud en el original.
-
-par(mfrow=c(2,2))
-for(i in 1:ncol(Remote)) {
-  if (is.numeric(Remote[,i])){
-    qqnorm(Remote[,i],main = paste("Normal Q-Q Plot for ",colnames(Remote)[i]))
-    qqline(Remote[,i],col="red")
-    hist(Remote[,i],
-      main=paste("Histogram for ", colnames(Remote)[i]),
-      xlab=colnames(Remote)[i], freq = FALSE)
-  }
-}
-
-```
-
-No parece que las gráficas representen que claramente las variables siguen una distribución normal. Para verificarlo, a continuación se realiza la comprobación mediante el test de Shapiro-Wilk y así no dar lugar a errores.
-
-```{r}
-
-for(i in 1:ncol(Remote)) {
-  if (is.numeric(Remote[,i])){
-    result <- shapiro.test(Remote[,i])
-    print(paste("Resultados para: ", colnames(Remote)[i]))
-    print(result)
-  }
-}
-```
-
-Se puede observar que a través de los test aplicados a las variables cuantitativas, el p-value es menor que 0.05, por lo que se deberá rechazar la hipótesis nula y aceptar que las variables no siguen una distribución normal. Por lo tanto, se deberán utlizar métodos para el análisis que no supongan que las variables cuantitativas siguen una distribución normal.
-
-No obstante, cuando el número de observaciones es mayor o igual a 30, como es el caso de estas variables cuantitativas y debido al teorema central del límite, se podrán utilizar pruebas paramétricas asumiendo que con un aumento de observaciones, la distribución se volvería normal y en forma de campana. Así las variables se podrían aproximar como una distribución normal de media 0 y desviación estándar 1.
-
-A continuación, se lleva a cabo la comprobación de homogeneidad de las varianzas. Se utilizará el test de Flinge-Killneen que resulta apropiado para variables no paramétricas que no siguen una distribución normal.
-
-```{r}
-
-fligner.test(Visualizaciones ~ lat, Remote)
-fligner.test(Visualizaciones ~ lon, Remote)
-fligner.test(Solicitudes ~ lat, Remote)
-fligner.test(Solicitudes ~ lon, Remote)
-fligner.test(Visualizaciones ~ Solicitudes, Remote)
-
-```
-
-Se obtiene como resultado que las variables numéricas no son homogéneas según su varianza ya que en todos estos test se consigue un p-value menor de 0.05. Se deberá tener en cuenta para la aplicación de métodos analíticos que asuman homogeneidad de las varianzas.
-
-## 4.3 Aplicación de pruebas estadísticas para comparar los grupos de datos.
-
-En función de los datos y el objetivo del estudio, aplicar pruebas de contraste de hipótesis, correlaciones, regresiones, etc. Aplicar al menos tres métodos de análisis diferentes.
-
-### 4.3.1 Grado de independencia y predictividad sobre la variable "Solicitudes".
-
-```{r}
-# Eliminar columnas dataframe
-
-borrar <- c("lat_min","lat_max","lon_min","lon_max","X")
-Remote <- Remote[ , !(names(Remote) %in% borrar)]
-str(Remote)
-
-corr_matrix <- matrix(nc = 2, nr = 0)
-colnames(corr_matrix) <- c("estimate", "p-value")
-# Calcular el coeficiente de correlación para cada variable cuantitativa
-# con respecto al campo "precio"
-Remote[,length(Remote)]
-for (i in 1:(ncol(Remote) - 1)) {
-  if (is.integer(Remote[,i]) | is.numeric(Remote[,i])) {
-    spearman_test = cor.test(Remote[,i],Remote$Visualizaciones,method = "spearman")
-    corr_coef = spearman_test$estimate
-    p_val = spearman_test$p.value
-    # Add row to matrix
-    pair = matrix(ncol = 2, nrow = 1)
-    pair[1][1] = corr_coef
-    pair[2][1] = p_val
-    corr_matrix <- rbind(corr_matrix, pair)
-    rownames(corr_matrix)[nrow(corr_matrix)] <- colnames(Remote)[i]
-  }
-}
-print(corr_matrix)
-
-anova_fare <- aov(lat ~ Solicitudes, Remote)
-summary(anova_fare)
-
-anova_age <- aov(lon ~ Solicitudes, Remote)
-summary(anova_age)
-
-```
-
-### 4.3.2 Modelo de regresión lineal
-
-```{r}
-
-remote_lat_positive<-Remote[which(Remote$lat>0),]
-ntrain <- nrow(remote_lat_positive)*0.8
-ntest <- nrow(remote_lat_positive)*0.2
-set.seed(12312)
-index_train<-sample(1:nrow(remote_lat_positive),size = ntrain)
-train<-remote_lat_positive[index_train,]
-test<-remote_lat_positive[-index_train,]
-modelo<-lm(formula = Solicitudes ~ lat + lon + Visualizaciones, data=train)
-summary(modelo)
-
-prob_sl<-predict(modelo, test, type="response")
-mc_sl<-data.frame(
-  real=test$Solicitudes,
-  predicted= prob_sl,
-  dif=ifelse(test$Solicitudes>prob_sl, -prob_sl*100/test$Solicitudes,prob_sl*100/test$Solicitudes)
-  )
-colnames(mc_sl)<-c("Real","Predecido","Dif%")
-knitr::kable(mc_sl)
-
-```
-
-
-```{r}
-library(magrittr)
-Remote %<>%
-  mutate(Date= as.Date(Date, format= "%Y-%m-%d"))
-Remote$Solicitudes <- as.numeric(Remote$Solicitudes)
-Remote$Visualizaciones <- as.numeric(Remote$Visualizaciones)
-WorldWide %<>%
-  mutate(Date= as.Date(Date, format= "%Y-%m-%d"))
-UK %<>%
-  mutate(Date= as.Date(Date, format= "%Y-%m-%d"))
-Spain %<>%
-  mutate(Date= as.Date(Date, format= "%Y-%m-%d"))
-Scotland %<>%
-  mutate(Date= as.Date(Date, format= "%Y-%m-%d"))
-
-Remote$Date[which(Remote$Date <= "2020-10-01")] <- NA
-
-Remote<-na.omit(Remote)
-
-hist(Remote$Date,"days")
-hist(Remote$Solicitudes)
-hist(Remote$Visualizaciones)
-hist(WorldWide$Date,"days")
-hist(UK$Date,"days")
-hist(Spain$Date,"days")
-hist(Scotland$Date,"days")
 
 ```
