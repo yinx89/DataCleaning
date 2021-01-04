@@ -24,6 +24,8 @@ knitr::opts_chunk$set(echo = TRUE)
 library(dplyr)
 library(VIM)
 library(ggplot2)
+library(tidyverse)
+library(scales)
 ```
 
 # 1. Descripción del dataset
@@ -102,22 +104,44 @@ Corregimos los tipos de los datos.
 jobs$Date <- as.Date(jobs$Date, format="%Y-%m-%d")
 jobs$Solicitudes <- as.numeric(jobs$Solicitudes)
 jobs$Visualizaciones <- as.numeric(jobs$Visualizaciones)
-jobs$Level <- as.factor(jobs$Level)
-jobs$Type <- as.factor(jobs$Type)
-jobs$Empleados <- as.factor(jobs$Empleados)
-jobs$Quick.Application <- as.factor(jobs$Quick.Application)
-jobs$Recommended.Flavor <- as.factor(jobs$Recommended.Flavor)
-jobs$dataset <- as.factor(jobs$dataset)
+jobs$Level <- factor(jobs$Level, exclude = NULL)
+jobs$Type <- factor(jobs$Type, exclude = NULL)
+jobs$Empleados <- factor(jobs$Empleados, exclude = NULL)
+jobs$Quick.Application <- factor(jobs$Quick.Application, exclude = NULL)
+jobs$Recommended.Flavor <- factor(jobs$Recommended.Flavor, exclude = NULL)
+jobs$dataset <- factor(jobs$dataset, exclude = NULL)
 ```
 
 Nos quedamos solo con las ofertas publicadas a partir de
 ```{r}
+all_jobs <- jobs
 jobs <- jobs %>% 
   filter(Date >= "2020-10-01")
+nrow(jobs)
 ```
 
+Nos hemos quedado con `r nrow(jobs)` observaciones.
+
 ```{r}
-nrow(jobs)
+summary(jobs)
+```
+
+Cambiamos los niveles para el tipo de jornada ya que la gran mayoría de ofertas son para jornada completa. Dejamos solo los niveles "Jornada completa" y "Otra jornada".
+
+```{r}
+Otra <- c("Contrato por obra", "Media jornada", "Otro", "Prácticas", "Temporal", "Voluntario")
+jobs <- jobs %>%
+  mutate(Type = fct_collapse(Type, "Otra jornada" = Otra))
+```
+
+Parece que los niveles de factor de Empleados no están ordenados de una forma coherente así que los ordenamos.
+```{r}
+levels(jobs$Empleados)
+```
+
+Los ordenamos.
+```{r}
+jobs$Empleados <- factor(jobs$Empleados, levels = c("2-10", "11-50", "51-200", "201-500", "501-1000", "1001-5000", "5001-10.000", "Más de 10.001"), exclude = NULL)
 ```
 
 
@@ -128,17 +152,8 @@ aggr(jobs, numbers=TRUE, sortVars=TRUE, labels=names(jobs),
 cex.axis=.7, gap=3, ylab=c("Missing data","Pattern"))
 ```
 
+Tratamos los valores perdidos numéricos. 
 ```{r}
-#library(randomForest)
-#jobs <- rfImpute(Level ~ Empleados, data=jobs)
-#na.roughfix(jobs["Recommended.Flavor"])
-#rfImpute(Level ~ Empleados, data=jobs)
-jobs <- jobs %>%
-  group_by(Level, Quick.Application) %>%
-    mutate(Empleados = ifelse(is.na(Empleados), which.max(Empleados), Empleados))
-jobs <- jobs %>%
-  group_by(Level, Quick.Application) %>%
-    mutate(Recommended.Flavor = ifelse(is.na(Recommended.Flavor), which.max(Recommended.Flavor), Recommended.Flavor))
 jobs <- jobs %>%
   group_by(Level, Quick.Application) %>%
     mutate(Solicitudes = ifelse(is.na(Solicitudes), median(Solicitudes, na.rm = TRUE), Solicitudes))
@@ -154,18 +169,15 @@ aggr(jobs, numbers=TRUE, sortVars=TRUE, labels=names(jobs),
 cex.axis=.7, gap=3, ylab=c("Missing data","Pattern"))
 ```
 
-Los valores perdidos se han reducido casi a la mitad y los que quedan se dejan así.
-
 ```{r message=FALSE, warning=FALSE}
-library(ggplot2)
 grid.arrange(
   qplot(Date, data=jobs)+ theme(axis.text.x = element_text(angle = 25)),
-  qplot(Level, data=jobs)+ theme(axis.text.x = element_text(angle = 20, hjust=0.7)),
+  qplot(Level, data=jobs)+ theme(axis.text.x = element_text(angle = 20, hjust=0.7, size = 7)),
   qplot(Type, data=jobs)+ theme(axis.text.x = element_text(angle = 20, hjust=1)),
-  qplot(Solicitudes, data=jobs),
-  qplot(Empleados, data=jobs),
-  qplot(Visualizaciones, data=jobs),
-  qplot(Recommended.Flavor, data=jobs)
+  qplot(Solicitudes, data=jobs)+ theme(axis.text.x = element_text(angle = 25)),
+  qplot(Empleados, data=jobs)+ theme(axis.text.x = element_text(angle = 30, hjust=0.7, size = 7)),
+  qplot(Visualizaciones, data=jobs)+ theme(axis.text.x = element_text(angle = 25)),
+  qplot(Recommended.Flavor, data=jobs)+ theme(axis.text.x = element_text(angle = 30, hjust=0.7, size = 7))
 )
 ```
 
@@ -212,15 +224,45 @@ ggplot(jobs, aes(x=Level, y=Solicitudes, color=Level)) +
 ## 4.3 Regresión logistica
 
 ```{r}
-lgm <- glm(formula = Quick.Application ~ Solicitudes + Level + Recommended.Flavor, family = binomial(link=logit), data = jobs)
-lgm
+lgm <- glm(formula = Quick.Application ~ Level + Type + Solicitudes + Visualizaciones + Recommended.Flavor, family = binomial(link=logit), data = jobs)
+summary(lgm)
 ```
 
-$${logit}(p_i)=\ln\left(\frac{p_i}{1-p_i}\right) = `r round(lgm_$coefficients[1],2)` `r round(lgm_$coefficients[2],2)`x_1 + `r round(lgm_$coefficients[3],2)`x_2 `r round(lgm_$coefficients[4],2)`x_3$$
+$${logit}(p_i)=\ln\left(\frac{p_i}{1-p_i}\right) = `r round(lgm_$coefficients[1],2)` + `r round(lgm_$coefficients[2],2)`x_1 + `r round(lgm_$coefficients[3],2)`x_2 + `r round(lgm_$coefficients[4],2)`x_3 `r round(lgm_$coefficients[4],2)`x_4 `r round(lgm_$coefficients[4],2)`x_5 `r round(lgm_$coefficients[4],2)`x_3
+6 `r round(lgm_$coefficients[4],2)`x_7 + `r round(lgm_$coefficients[4],2)`x_8 `r round(lgm_$coefficients[4],2)`x_9 `r round(lgm_$coefficients[4],2)`x_10 + `r round(lgm_$coefficients[4],2)`x_11 `r round(lgm_$coefficients[4],2)`x_12$$
+
+```{r 3.3.3.1}
+predicciones <- ifelse(test = lgm$fitted.values >= 0.5, yes = ">50%", no = "<50%")
+matriz_confusion <- table(lgm$model$Quick.Application, predicciones,
+                          dnn = c("observaciones", "predicciones"))
+matriz_confusion
+```
 
 ```{r}
-summary(jobs)
+library(vcd)
+mosaic(matriz_confusion, shade = T, colorize = T,
+       gp = gpar(fill = matrix(c("green3", "red2", "red2", "green3"), 2, 2)))
 ```
+Podemos ver que hay `r matriz_confusion[3]` falsos positivos y `r matriz_confusion[2]` falsos negativos.
+```{r}
+sensibilidad <- label_percent(accuracy = 0.01)(matriz_confusion[4]/(matriz_confusion[4]+matriz_confusion[2]))
+especificidad <- label_percent(accuracy = 0.01)(matriz_confusion[1]/(matriz_confusion[1]+matriz_confusion[3]))
+cat("sensibilidad: ",  sensibilidad)
+cat("\nespecificidad: ", especificidad)
+```
+
+La sensibilidad es del `r sensibilidad` y la especificidad del `r especificidad`.
+
+```{r}
+library(pROC)
+prob=predict(lgm, newdata=jobs, type="response")
+r=roc(response=jobs$Quick.Application, predictor=prob, data=data)
+## Setting levels: control = 0, case = 1
+## Setting direction: controls < cases
+plot (r)
+auc(r)
+```
+
 
 ```{r}
 head(jobs, 10)
