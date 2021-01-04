@@ -26,11 +26,11 @@ asdf
 asd
 f
 
-```{r}
+```{r 1, message=FALSE, warning=FALSE}
 # Carga de librerías
 library(dplyr)
-library(ggplot2)
 library(VIM)
+library(ggplot2)
 library(highcharter)
 library(maps)
 library(ggmap)
@@ -48,11 +48,16 @@ Consta de 6 archivos CSV con las ofertas encontradas a nivel de Escocia, Reino U
 El primer paso es integrar los distintos archivos en un mismo dataset.
 
 ```{r}
-Scotland <- read.csv("data/Scotland.csv", header=TRUE, sep=",", stringsAsFactors=FALSE)
-Spain <- read.csv("data/Spain.csv", header=TRUE, sep=",", stringsAsFactors=FALSE)
-UK <- read.csv("data/UK.csv", header=TRUE, sep=",", stringsAsFactors=FALSE)
-WorldWide <- read.csv("data/WorldWide.csv", header=TRUE, sep=",", stringsAsFactors=FALSE)
-Remote <- read.csv("data/Remote.csv", header=TRUE, sep=",", stringsAsFactors=FALSE)
+Scotland <- read.csv("Scotland.csv", header=TRUE, sep=",", stringsAsFactors=FALSE)
+Spain <- read.csv("Spain.csv", header=TRUE, sep=",", stringsAsFactors=FALSE)
+UK <- read.csv("UK.csv", header=TRUE, sep=",", stringsAsFactors=FALSE)
+WorldWide <- read.csv("WorldWide.csv", header=TRUE, sep=",", stringsAsFactors=FALSE)
+Remote <- read.csv("Remote.csv", header=TRUE, sep=",", stringsAsFactors=FALSE)
+Scotland$dataset <- "Scotland"
+Spain$dataset <- "Spain"
+UK$dataset <- "UK"
+WorldWide$dataset <- "WorldWide"
+Remote$dataset <- "Remote"
 jobs <- rbind(Scotland, Spain, UK, WorldWide, Remote)
 ```
 
@@ -63,19 +68,7 @@ str(jobs)
 Quitamos la primera columna ya que no es más que un índice que no aporta ninguna información.
 
 ```{r}
-jobs <- jobs[2:17]
-```
-
-Cambiamos a numéricas las columnas que deberían ser de este tipo pero se ven como "character".
-
-```{r}
-
-```
-
-Discretización y poner en varias variables con variables binarias (1 y 0)
-
-```{r}
-
+jobs <- jobs[2:18]
 ```
 
 # 3. Limpieza de los datos
@@ -83,13 +76,14 @@ Discretización y poner en varias variables con variables binarias (1 y 0)
 Al haber integrado varios archivos de búsquedas de ámbitos territoriales que se solapan lo primero es eliminar las posibles duplicidades que podamos encontrar.
 
 ```{r}
-sum(duplicated(jobs))
+sum(duplicated(jobs[1:5]))
 ```
 
-Hay `r sum(duplicated(jobs))` observaciones duplicadas así que las eliminamos.
+Hay `r sum(duplicated(jobs[1:16]))` observaciones duplicadas así que las eliminamos.
 
 ```{r}
-jobs <- distinct(jobs)
+jobs <- jobs %>% 
+  distinct(Job.ID, Company.Name, Location, .keep_all = TRUE)
 ```
 
 # 3.1. Valores perdidos
@@ -109,26 +103,137 @@ jobs[jobs==""] <-- NA
 jobs[jobs=="None"] <-- NA
 ```
 
+Para corrgir los tipos de datos vamos a ver qué variables se podrían convertir a tipo factor.
+```{r}
+sapply(jobs, function(x) length(unique(x)))
+```
+
+
 Corregimos los tipos de los datos.
 
 ```{r}
 jobs$Date <- as.Date(jobs$Date, format="%Y-%m-%d")
 jobs$Solicitudes <- as.numeric(jobs$Solicitudes)
 jobs$Visualizaciones <- as.numeric(jobs$Visualizaciones)
-sum(is.na(jobs))
+jobs$Level <- as.factor(jobs$Level)
+jobs$Type <- as.factor(jobs$Type)
+jobs$Empleados <- as.factor(jobs$Empleados)
+jobs$Quick.Application <- as.factor(jobs$Quick.Application)
+jobs$Recommended.Flavor <- as.factor(jobs$Recommended.Flavor)
+jobs$dataset <- as.factor(jobs$dataset)
 ```
 
-Mostramos la distribución de los valores perdidos.
+Nos quedamos solo con las ofertas publicadas a partir de
+```{r}
+jobs <- jobs %>% 
+  filter(Date >= "2020-10-01")
+```
 
 ```{r}
+nrow(jobs)
+```
+
+
+Mostramos la distribución de los valores perdidos.
+```{r warning=FALSE}
+sum(is.na(jobs))
 aggr(jobs, numbers=TRUE, sortVars=TRUE, labels=names(jobs),
 cex.axis=.7, gap=3, ylab=c("Missing data","Pattern"))
 ```
 
 ```{r}
-summary(jobs)
+#library(randomForest)
+#jobs <- rfImpute(Level ~ Empleados, data=jobs)
+#na.roughfix(jobs["Recommended.Flavor"])
+#rfImpute(Level ~ Empleados, data=jobs)
+jobs <- jobs %>%
+  group_by(Level, Quick.Application) %>%
+    mutate(Empleados = ifelse(is.na(Empleados), which.max(Empleados), Empleados))
+jobs <- jobs %>%
+  group_by(Level, Quick.Application) %>%
+    mutate(Recommended.Flavor = ifelse(is.na(Recommended.Flavor), which.max(Recommended.Flavor), Recommended.Flavor))
+jobs <- jobs %>%
+  group_by(Level, Quick.Application) %>%
+    mutate(Solicitudes = ifelse(is.na(Solicitudes), median(Solicitudes, na.rm = TRUE), Solicitudes))
+jobs <- jobs %>%
+  group_by(Level, Quick.Application) %>%
+    mutate(Visualizaciones = ifelse(is.na(Visualizaciones), median(Visualizaciones, na.rm = TRUE), Visualizaciones))
 ```
 
+Comprobamos cómo quedan ahora los valores perdidos.
+```{r warning=FALSE}
+sum(is.na(jobs))
+aggr(jobs, numbers=TRUE, sortVars=TRUE, labels=names(jobs),
+cex.axis=.7, gap=3, ylab=c("Missing data","Pattern"))
+```
+
+Los valores perdidos se han reducido casi a la mitad y los que quedan se dejan así.
+
+```{r message=FALSE, warning=FALSE}
+library(ggplot2)
+grid.arrange(
+  qplot(Date, data=jobs)+ theme(axis.text.x = element_text(angle = 25)),
+  qplot(Level, data=jobs)+ theme(axis.text.x = element_text(angle = 20, hjust=0.7)),
+  qplot(Type, data=jobs)+ theme(axis.text.x = element_text(angle = 20, hjust=1)),
+  qplot(Solicitudes, data=jobs),
+  qplot(Empleados, data=jobs),
+  qplot(Visualizaciones, data=jobs),
+  qplot(Recommended.Flavor, data=jobs)
+)
+```
+
+Hacemos un boxplot para cada una de las variables numéricas.
+```{r}
+ggplot(jobs, aes(x=Level, y=Solicitudes, color=Level)) + 
+  ggtitle("Diagrama de cajas") + 
+  scale_color_brewer(palette="Dark2") +
+  geom_boxplot() +
+  theme(legend.position = "null") +
+  geom_jitter(width = 0.1)
+
+ggplot(jobs, aes(x=Level, y=Visualizaciones, color=Level)) + 
+  ggtitle("Diagrama de cajas") + 
+  scale_color_brewer(palette="Dark2") +
+  geom_boxplot() +
+  theme(legend.position = "null") +
+  geom_jitter(width = 0.1)
+```
+
+```{r}
+tail(sort(boxplot.stats(jobs$Solicitudes)$out),5)
+```
+
+Voy a observar las tres ofertas de trabajo que superan las 3000 solicitudes.
+```{r}
+jobs[which(jobs$Solicitudes %in% tail(sort(boxplot.stats(jobs$Solicitudes)$out),3)),]
+```
+
+Aunque puede que sean valores razonables, a modo de ejemplo, eliminamos las 3 ofertas de trabajo que superan las 3000 solicitudes y mostramos cómo queda ahora el gráfico de los boxplots.
+```{r}
+jobs <- jobs[-which(jobs$Solicitudes %in% tail(sort(boxplot.stats(jobs$Solicitudes)$out),3)),]
+
+ggplot(jobs, aes(x=Level, y=Solicitudes, color=Level)) + 
+  ggtitle("Diagrama de cajas") + 
+  scale_color_brewer(palette="Dark2") +
+  geom_boxplot() +
+  theme(legend.position = "null") +
+  geom_jitter(width = 0.1)
+```
+
+# 4. Análisis de los datos.
+
+## 4.3 Regresión logistica
+
+```{r}
+lgm <- glm(formula = Quick.Application ~ Solicitudes + Level + Recommended.Flavor, family = binomial(link=logit), data = jobs)
+lgm
+```
+
+$${logit}(p_i)=\ln\left(\frac{p_i}{1-p_i}\right) = `r round(lgm_$coefficients[1],2)` `r round(lgm_$coefficients[2],2)`x_1 + `r round(lgm_$coefficients[3],2)`x_2 `r round(lgm_$coefficients[4],2)`x_3$$
+
+```{r}
+summary(jobs)
+```
 
 ```{r}
 head(jobs, 10)
