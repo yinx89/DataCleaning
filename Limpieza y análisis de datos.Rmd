@@ -38,13 +38,16 @@ library(polycor)
 library(reshape2)
 library(magrittr)
 library(scales)
+library(gridExtra)
 ```
 
 # 1. Descripción del dataset
 
 El dataset es un listado de ofertas de trabajo publicadas en Linkedin para ciencia de datos (término "Data Scientist") que fue obtenido en la primera parte de esta práctica.
 
-Consta de 6 archivos CSV con las ofertas encontradas a nivel de Escocia, Reino Unido, España, Mundo y remoto.
+Se pueden ver los datos y el código en el siguiente repositorio: [https://github.com/InigoAB/DataCleaning](https://github.com/InigoAB/DataCleaning)
+
+Consta de 6 archivos CSV con las ofertas encontradas a nivel de Escocia, Reino Unido, España, Mundo y remoto que unificaremos, limpiaremos y daremos formato para posteriormente analizar y buscar información relevante.
 
 ```{r}
 #TODO ¿Porque es importante y qué pregunta/problema pretende responder? AMPLIAR
@@ -56,7 +59,7 @@ Consta de 6 archivos CSV con las ofertas encontradas a nivel de Escocia, Reino U
 #TODO BREVE INTRODUCCIÓN
 ```
 
-El primer paso es integrar los distintos archivos en un mismo dataset.
+El primer paso es integrar los archivos de las distintas ubicaciones en un mismo dataframe con el que podamos trabajar.
 
 ```{r}
 Scotland <- read.csv("data/Scotland.csv", header=TRUE, sep=",", stringsAsFactors=FALSE)
@@ -70,21 +73,41 @@ UK$dataset <- "UK"
 WorldWide$dataset <- "WorldWide"
 Remote$dataset <- "Remote"
 jobs <- rbind(Scotland, Spain, UK, WorldWide, Remote)
+dim(jobs)
 ```
+
+Obtenemos un dataframe de `r nrow(jobs)` observaciones y `r ncol(jobs)` variables. Vamos a inspeccionar las variables.
 
 ```{r}
 str(jobs)
 ```
 
 Quitamos la primera columna ya que no es más que un índice que no aporta ninguna información.
-
 ```{r}
-jobs <- jobs[2:18]
+jobs$X <- NULL
 ```
 
-```{r}
-#TODO EXPLICACIÓN de las variables (COPIAR DE LA ANTERIOR PRACTICA)
-```
+Todas las demás variables han quedado como de tipo carácter así que en el siguiente apartado haremos las transformaciones necesarias, de momento las explicamos.
+
+## Explicación de las variables
+Nos quedamos con las siguientes columnas
+- Job_ID: identificador de la oferta de empleo 
+- Date: fecha de publicación
+- Company_Name: nombre de la empresa 
+- Role: título o puesto de la oferta
+- Location: ubicación del puesto
+- Description: descripción del puesto (del que se puede extraer más información)
+- Level: nivel de experiencia requerida para el puesto
+- Type: tipo de contrato (jornada completa o parcial)
+- Functions: funciones del puesto de la oferta
+- Industries: sectores que involucra
+- Solicitudes: número de solicitudes enviadas a la oferta
+- Empleados: intervalo/número de empleados de la empresa
+- Quick Application (True/False): método de solicitud rápida por LinkedIn Emails: e-mails de contacto
+- Visualizaciones: número de visualizaciones que tiene la oferta
+- Recommended Flavor: tipo de oferta
+- dataset: dataset de origen de cada variable
+
 
 # 3. Limpieza de los datos
 
@@ -94,7 +117,7 @@ Al haber integrado varios archivos de búsquedas de ámbitos territoriales que s
 sum(duplicated(jobs[1:5]))
 ```
 
-Hay `r sum(duplicated(jobs[1:16]))` observaciones duplicadas así que las eliminamos.
+Hay `r sum(duplicated(jobs[1:5]))` observaciones duplicadas así que las eliminamos.
 
 ```{r}
 jobs <- jobs %>% 
@@ -103,7 +126,7 @@ jobs <- jobs %>%
 
 ## 3.1. Valores perdidos
 
-Buscamos valores perdidos.
+Buscamos valores perdidos a lo largo del dataframe.
 
 ```{r}
 sum(is.na(jobs))
@@ -111,20 +134,20 @@ sum(jobs=="")
 sum(jobs=="None")
 ```
 
-Sustituimos los valores en blanco por NA.
+Sustituimos los valores en blanco y "None" por NA.
 
 ```{r}
 jobs[jobs==""] <-- NA
 jobs[jobs=="None"] <-- NA
 ```
 
-Para corrgir los tipos de datos vamos a ver qué variables se podrían convertir a tipo factor.
+Para corregir los tipos de datos vamos a ver qué variables se podrían convertir a tipo factor viendo la cantidad de datos distintos que tiene cada una.
 
 ```{r}
 sapply(jobs, function(x) length(unique(x)))
 ```
 
-Corregimos los tipos de los datos.
+Todas las variables que tienen menos de 10 valores únicos las convertiremos a tipo factor. Date lo pasamos a formato fecha y Solicitudes y Visualizaciones a tipo numérico.
 
 ```{r}
 jobs$Date <- as.Date(jobs$Date, format="%Y-%m-%d")
@@ -136,23 +159,7 @@ jobs$Empleados <- factor(jobs$Empleados, exclude = NULL)
 jobs$Quick.Application <- factor(jobs$Quick.Application, exclude = NULL)
 jobs$Recommended.Flavor <- factor(jobs$Recommended.Flavor, exclude = NULL)
 jobs$dataset <- factor(jobs$dataset, exclude = NULL)
-```
 
-Nos quedamos solo con las ofertas publicadas a partir de...
-
-```{r}
-#TODO "ESTO SERIA SOLO EN VISUALIZACIONES POR FECHA"
-```
-
-```{r}
-all_jobs <- jobs
-jobs <- jobs %>% 
-  filter(Date >= "2020-10-01")
-nrow(jobs)
-```
-
-Nos hemos quedado con `r nrow(jobs)` observaciones.
-```{r}
 summary(jobs)
 ```
 
@@ -175,14 +182,13 @@ jobs$Empleados <- factor(jobs$Empleados, levels = c("2-10", "11-50", "51-200", "
 ```
 
 Mostramos la distribución de los valores perdidos.
-
 ```{r warning=FALSE}
 sum(is.na(jobs))
 aggr(jobs, numbers=TRUE, sortVars=TRUE, labels=names(jobs),
 cex.axis=.7, gap=3, ylab=c("Missing data","Pattern"))
 ```
 
-Tratamos los valores perdidos numéricos. 
+Tratamos los valores perdidos numéricos sustituyéndolos por la mediana.
 ```{r}
 jobs <- jobs %>%
   group_by(Level, Quick.Application) %>%
@@ -192,18 +198,17 @@ jobs <- jobs %>%
     mutate(Visualizaciones = ifelse(is.na(Visualizaciones), median(Visualizaciones, na.rm = TRUE), Visualizaciones))
 ```
 
-Comprobamos cómo quedan ahora los valores perdidos.
-
-```{r warning=FALSE}
+Comprobamos cómo queda ahora la distribución de valores perdidos.
+```{r message=FALSE, warning=FALSE}
 sum(is.na(jobs))
 aggr(jobs, numbers=TRUE, sortVars=TRUE, labels=names(jobs),
 cex.axis=.7, gap=3, ylab=c("Missing data","Pattern"))
 ```
 
+## 3.2. Identificación y tratamiento de valores extremos
+
+Empezamos haciendo una visualización sencilla de las variables susceptibles de tener valores aislados.
 ```{r message=FALSE, warning=FALSE}
-
-library(gridExtra)
-
 grid.arrange(
   qplot(Date, data=jobs)+ theme(axis.text.x = element_text(angle = 25)),
   qplot(Level, data=jobs)+ theme(axis.text.x = element_text(angle = 20, hjust=0.7, size = 7)),
@@ -215,57 +220,38 @@ grid.arrange(
 )
 ```
 
-Hacemos un boxplot para cada una de las variables numéricas.
-
+Hacemos un boxplot para cada una de las variables numéricas agrupándolas en función de la variable "Level" para así visualizar mejor los valores numéricos.
 ```{r}
 ggplot(jobs, aes(x=Level, y=Solicitudes, color=Level)) + 
-  ggtitle("Diagrama de cajas") + 
+  ggtitle("Diagrama de cajas de Solicitudes") + 
   scale_color_brewer(palette="Dark2") +
   geom_boxplot() +
   theme(legend.position = "null") +
   geom_jitter(width = 0.1)
 
 ggplot(jobs, aes(x=Level, y=Visualizaciones, color=Level)) + 
-  ggtitle("Diagrama de cajas") + 
+  ggtitle("Diagrama de cajas de Visualizaciones") + 
   scale_color_brewer(palette="Dark2") +
   geom_boxplot() +
   theme(legend.position = "null") +
   geom_jitter(width = 0.1)
 ```
 
-```{r}
-#TODO EXPLICAR RESULTADOS
-```
+Como ya se veía por las gráficas anteriores son datos con colas muy largas a la derecha y algunos de los valores bastante aislados.
 
+Vamos a mirar los 5 valores más aislados de la variable "Solicitudes".
 ```{r}
 tail(sort(boxplot.stats(jobs$Solicitudes)$out),5)
 ```
 
-Voy a observar las tres ofertas de trabajo que superan las 3000 solicitudes.
-
-```{r}
-#TODO ¿es necesario estos apartados de acontinuacion? Yo lo eliminaría, no aporta nada
-
-# FALTARÍA PONERLO EXACTAMENTE COMO PONE EN EL ENUNCIADO DE LA PRÁCTICA. PUNTOS 3.1 Y 3.2
-# PARA LOS VALORES EXTREMOS, LO HACEMOS PARA LAS FECHAS POR EJEMPLO. SE PUEDE COMENTAR AHORA
-```
+Vamos a observar las tres ofertas de trabajo que superan las 3000 solicitudes.
 
 ```{r}
 jobs[which(jobs$Solicitudes %in% tail(sort(boxplot.stats(jobs$Solicitudes)$out),3)),]
 ```
 
-Aunque puede que sean valores razonables, a modo de ejemplo, eliminamos las 3 ofertas de trabajo que superan las 3000 solicitudes y mostramos cómo queda ahora el gráfico de los boxplots.
+Aunque sean valores extremos, observándolos en detalles parecen razonables y correctos así que los dejamos.
 
-```{r}
-jobs <- jobs[-which(jobs$Solicitudes %in% tail(sort(boxplot.stats(jobs$Solicitudes)$out),3)),]
-
-ggplot(jobs, aes(x=Level, y=Solicitudes, color=Level)) + 
-  ggtitle("Diagrama de cajas") + 
-  scale_color_brewer(palette="Dark2") +
-  geom_boxplot() +
-  theme(legend.position = "null") +
-  geom_jitter(width = 0.1)
-```
 
 # 4. Análisis de los datos.
 
@@ -423,25 +409,25 @@ coord_fixed()
 ### 4.3.2 Grado de independencia y predictividad sobre la variable "Solicitudes".
 
 ```{r}
-
+"
 #TODO ES ESTO NECESARIO? SI NO, PODEMOS HACER OTRO ANÁLISIS DEL ESTILO PARA VER INDEPENDENCIA ENTRE VARIABLES O VER COMO LA LATITUD Y LA LONGITUD SON IMPORTANTES
 
 str(jobs)
 
 # Eliminar columnas dataframe
 
-borrar <- c("Date")
+borrar <- c('Date')
 jobs <- jobs[ , !(names(jobs) %in% borrar)]
 str(Remote)
 
 corr_matrix <- matrix(nc = 2, nr = 0)
-colnames(corr_matrix) <- c("estimate", "p-value")
+colnames(corr_matrix) <- c('estimate', 'p-value')
 # Calcular el coeficiente de correlación para cada variable cuantitativa
-# con respecto al campo "precio"
-spearman_test = cor.test(jobs[,3],jobs$Visualizaciones,method = "spearman")
+# con respecto al campo 'precio'
+spearman_test = cor.test(jobs[,3],jobs$Visualizaciones,method = 'spearman')
 for (i in 1:(ncol(jobs) - 1)) {
   if (is.integer(jobs[,i]) | is.numeric(jobs[,i])) {
-    spearman_test = cor.test(jobs[,i],jobs$Visualizaciones,method = "spearman")
+    spearman_test = cor.test(jobs[,i],jobs$Visualizaciones,method = 'spearman')
     corr_coef = spearman_test$estimate
     p_val = spearman_test$p.value
     # Add row to matrix
@@ -459,7 +445,7 @@ summary(anova_fare)
 
 anova_age <- aov(lon ~ Solicitudes, Remote)
 summary(anova_age)
-
+"
 ```
 
 ### 4.3.2 Modelo de regresión lineal
@@ -571,7 +557,7 @@ tail(jobs, 10)
 ```
 
 ```{r}
-
+"
 library(C50)
 dim(jobs)
 
@@ -581,7 +567,7 @@ Y <- jobs$
 X <- jobs[,5]
 model <- C50::C5.0(jobs$Type, jobs$Level,rules=TRUE )
 summary(model)
-
+"
 ```
 
 ```{r}
@@ -621,18 +607,18 @@ p <- jobs_merged %>%
     theme(legend.position = "none")
 p
 
-NI <- map_data("world") %>%
-  filter(region == "UK")
+"NI <- map_data('world') %>%
+  filter(region == 'UK')
 p <- Scotland %>%
   ggplot() +
-    geom_polygon(data = NI, aes(x=long, y = lat, group = group), fill="grey", alpha=0.3) +
+    geom_polygon(data = NI, aes(x=long, y = lat, group = group), fill='grey', alpha=0.3) +
     geom_count(aes(x=lon, y=lat)) +
     scale_size_continuous(range=c(1,3)) +
-    scale_color_viridis(option="inferno") +
+    scale_color_viridis(option='inferno') +
     theme_void() +
     coord_map() +
-    theme(legend.position = "none")
-p
+    theme(legend.position = 'none')
+p"
 
 world_map <- map_data("world")
 ggplot(world_map, aes(x = long, y = lat, group = group)) +
@@ -642,7 +628,7 @@ world <- map_data("world")
 head(world)
 
 locs <- c('Jiron Cuzco 423, Magdalena del Mar', 'Av Nicolas Arriola 500, La Victoria')
-geocode(locs)
+#geocode(locs)
 
 geocodeAdddress <- function(address) {
   require(RJSONIO)
@@ -662,15 +648,15 @@ geocodeAdddress("Time Square, New York City")
 
 # Loop through the addresses to get the latitude and longitude of each address and add it to the
 # origAddress data frame in new columns lat and lon
-for(i in 1:nrow(jobs)){
-  # Print("Working...")
-  result <- geocode(jobs$Location[i], output = "latlona", source = "google")
+"for(i in 1:nrow(jobs)){
+  # Print('Working...')
+  result <- geocode(jobs$Location[i], output = 'latlona', source = 'google')
   jobs$lon[i] <- as.numeric(result[1])
   jobs$lat[i] <- as.numeric(result[2])
   jobs$geoAddress[i] <- as.character(result[3])
 }
 # Write a CSV file containing origAddress to the working directory
-write.csv(jobs, "geocoded.csv", row.names=FALSE)
+write.csv(jobs, 'geocoded.csv', row.names=FALSE)"
 
 library(tmaptools)
 pubs_tmaptools <- geocode_OSM(Scotland$Location, details = TRUE, as.data.frame = TRUE)
@@ -871,7 +857,8 @@ hist(Scotland$Date,"days")
 ```
 
 ```{r}
-
+library(wordcloud)
+library(wordcloud2)
 df1 <- data.frame(table(unlist(strsplit(tolower(Scotland$Description), " "))))
 
 borrar <- c("and"," ","","to","the","of","a","in","with","for","you","our","is","as","we","on","or","are","be","will","an","your","work","working","that","this","have","at","their","role","from","skills","by","looking","what","-","can","all","across","they","who","such","new","more","if","through")
