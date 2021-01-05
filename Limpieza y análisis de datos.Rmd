@@ -3,16 +3,16 @@ title: "PRACTICA 2: LIMPIEZA Y VALIDACIÓN DE LOS DATOS"
 author: "Gines Molina e Iñigo Alvarez"
 date: "29/12/2020"
 output:
+  pdf_document:
+    highlight: zenburn
+    toc: yes
+  word_document: default
   html_document:
     highlight: default
     number_sections: yes
     theme: cosmo
     toc: yes
     toc_depth: 2
-  word_document: default
-  pdf_document:
-    highlight: zenburn
-    toc: yes
 ---
 
 ```{r setup, include=FALSE}
@@ -24,19 +24,23 @@ knitr::opts_chunk$set(echo = TRUE)
 # Carga de librerías
 library(dplyr)
 library(VIM)
+library(gridExtra)
 library(ggplot2)
-library(highcharter)
-library(maps)
-library(ggmap)
-library(ggpubr)
-library(tmaptools)
-library(tidyverse)
-library(plotly)
-library(viridis)
 library(stringi)
+library(stringr)
+library(tmaptools)
 library(polycor)
 library(reshape2)
-library(magrittr)
+library(wordcloud)
+library(wordcloud2)
+library(viridis)
+# library(highcharter)
+# library(maps)
+# library(ggmap)
+# library(ggpubr)
+# library(tidyverse)
+# library(plotly)
+# library(magrittr)
 ```
 
 # 1. Descripción del dataset
@@ -96,6 +100,9 @@ sum(duplicated(jobs[1:5]))
 Hay `r sum(duplicated(jobs[1:16]))` observaciones duplicadas así que las eliminamos.
 
 ```{r}
+
+jobs_with_duplicates <- jobs
+
 jobs <- jobs %>% 
   distinct(Job.ID, Company.Name, Location, .keep_all = TRUE)
 ```
@@ -115,6 +122,8 @@ Sustituimos los valores en blanco por NA.
 ```{r}
 jobs[jobs==""] <-- NA
 jobs[jobs=="None"] <-- NA
+jobs_with_duplicates[jobs_with_duplicates==""] <-- NA
+jobs_with_duplicates[jobs_with_duplicates=="None"] <-- NA
 ```
 
 Para corrgir los tipos de datos vamos a ver qué variables se podrían convertir a tipo factor.
@@ -135,6 +144,16 @@ jobs$Empleados <- as.factor(jobs$Empleados)
 jobs$Quick.Application <- as.factor(jobs$Quick.Application)
 jobs$Recommended.Flavor <- as.factor(jobs$Recommended.Flavor)
 jobs$dataset <- as.factor(jobs$dataset)
+
+jobs_with_duplicates$Date <- as.Date(jobs_with_duplicates$Date, format="%Y-%m-%d")
+jobs_with_duplicates$Solicitudes <- as.numeric(jobs_with_duplicates$Solicitudes)
+jobs_with_duplicates$Visualizaciones <- as.numeric(jobs_with_duplicates$Visualizaciones)
+jobs_with_duplicates$Level <- as.factor(jobs_with_duplicates$Level)
+jobs_with_duplicates$Type <- as.factor(jobs_with_duplicates$Type)
+jobs_with_duplicates$Empleados <- as.factor(jobs_with_duplicates$Empleados)
+jobs_with_duplicates$Quick.Application <- as.factor(jobs_with_duplicates$Quick.Application)
+jobs_with_duplicates$Recommended.Flavor <- as.factor(jobs_with_duplicates$Recommended.Flavor)
+jobs_with_duplicates$dataset <- as.factor(jobs_with_duplicates$dataset)
 ```
 
 Nos quedamos solo con las ofertas publicadas a partir de...
@@ -161,16 +180,6 @@ cex.axis=.7, gap=3, ylab=c("Missing data","Pattern"))
 ```
 
 ```{r}
-#library(randomForest)
-#jobs <- rfImpute(Level ~ Empleados, data=jobs)
-#na.roughfix(jobs["Recommended.Flavor"])
-#rfImpute(Level ~ Empleados, data=jobs)
-jobs <- jobs %>%
-  group_by(Level, Quick.Application) %>%
-    mutate(Empleados = ifelse(is.na(Empleados), which.max(Empleados), Empleados))
-jobs <- jobs %>%
-  group_by(Level, Quick.Application) %>%
-    mutate(Recommended.Flavor = ifelse(is.na(Recommended.Flavor), which.max(Recommended.Flavor), Recommended.Flavor))
 jobs <- jobs %>%
   group_by(Level, Quick.Application) %>%
     mutate(Solicitudes = ifelse(is.na(Solicitudes), median(Solicitudes, na.rm = TRUE), Solicitudes))
@@ -187,18 +196,18 @@ aggr(jobs, numbers=TRUE, sortVars=TRUE, labels=names(jobs),
 cex.axis=.7, gap=3, ylab=c("Missing data","Pattern"))
 ```
 
-Los valores perdidos se han reducido casi a la mitad y los que quedan se dejan así.
+Los valores perdidos se han reducido bastante y los que quedan se dejan así porque será importante para posteriores análisis.
 
 ```{r message=FALSE, warning=FALSE}
-library(gridExtra)
+
 grid.arrange(
   qplot(Date, data=jobs)+ theme(axis.text.x = element_text(angle = 25)),
   qplot(Level, data=jobs)+ theme(axis.text.x = element_text(angle = 20, hjust=0.7)),
   qplot(Type, data=jobs)+ theme(axis.text.x = element_text(angle = 20, hjust=1)),
   qplot(Solicitudes, data=jobs),
-  qplot(Empleados, data=jobs),
+  qplot(Empleados, data=jobs)+ theme(axis.text.x = element_text(angle = 20, hjust=1)),
   qplot(Visualizaciones, data=jobs),
-  qplot(Recommended.Flavor, data=jobs)
+  qplot(Recommended.Flavor, data=jobs)+ theme(axis.text.x = element_text(angle = 20, hjust=1))
 )
 ```
 
@@ -235,23 +244,6 @@ Voy a observar las tres ofertas de trabajo que superan las 3000 solicitudes.
 
 # FALTARÍA PONERLO EXACTAMENTE COMO PONE EN EL ENUNCIADO DE LA PRÁCTICA. PUNTOS 3.1 Y 3.2
 # PARA LOS VALORES EXTREMOS, LO HACEMOS PARA LAS FECHAS POR EJEMPLO. SE PUEDE COMENTAR AHORA
-```
-
-```{r}
-jobs[which(jobs$Solicitudes %in% tail(sort(boxplot.stats(jobs$Solicitudes)$out),3)),]
-```
-
-Aunque puede que sean valores razonables, a modo de ejemplo, eliminamos las 3 ofertas de trabajo que superan las 3000 solicitudes y mostramos cómo queda ahora el gráfico de los boxplots.
-
-```{r}
-jobs <- jobs[-which(jobs$Solicitudes %in% tail(sort(boxplot.stats(jobs$Solicitudes)$out),3)),]
-
-ggplot(jobs, aes(x=Level, y=Solicitudes, color=Level)) + 
-  ggtitle("Diagrama de cajas") + 
-  scale_color_brewer(palette="Dark2") +
-  geom_boxplot() +
-  theme(legend.position = "null") +
-  geom_jitter(width = 0.1)
 ```
 
 # 4. Análisis de los datos.
@@ -307,10 +299,6 @@ head(jobs_merged)
 En el dataset se obtienen XX variables, XX categóricas y XX numéricas. En este apartado se busca verificar si las variables numéricas (lat, lon, Solicitudes y Visualizaciones) siguen una distribución normal.
 
 Para verificarlo, primero se realizará un estudio visual de la normalidad mediante la gráfica quantile-quantile (Q-Q) que dibuja la correlación entre una muestra dada y la distribución normal. En esta primera gráfica se podrá observar el grado de aproximación o similitud con la línea de referencia de 45 grados. Además, también se realizará el estudio visual sobre el histograma de la variable
-
-```{r}
-#TODO TODAVIA FALTA EJECUTAR CON LA VARIABLE EMPLEADOS CORRECTAMENTE (TIPO FACTOR)
-```
 
 ```{r}
 
@@ -380,7 +368,6 @@ jobs_corr <- jobs_merged[ , !(names(jobs_merged) %in% borrar)]
 corr_matrix<-hetcor(jobs_corr, ML=FALSE, std.err=FALSE)
 corr_matrix$correlations
 
-
 ggplot(
   melt(corr_matrix$correlations),
   aes(Var2, Var1, fill = value)
@@ -405,48 +392,6 @@ coord_fixed()
 
 ```{r}
 #TODO EXPLICAR RESULTADOS
-```
-
-### 4.3.2 Grado de independencia y predictividad sobre la variable "Solicitudes".
-
-```{r}
-
-#TODO ES ESTO NECESARIO? SI NO, PODEMOS HACER OTRO ANÁLISIS DEL ESTILO PARA VER INDEPENDENCIA ENTRE VARIABLES O VER COMO LA LATITUD Y LA LONGITUD SON IMPORTANTES
-
-str(jobs)
-
-# Eliminar columnas dataframe
-
-borrar <- c("Date")
-jobs <- jobs[ , !(names(jobs) %in% borrar)]
-str(Remote)
-
-corr_matrix <- matrix(nc = 2, nr = 0)
-colnames(corr_matrix) <- c("estimate", "p-value")
-# Calcular el coeficiente de correlación para cada variable cuantitativa
-# con respecto al campo "precio"
-spearman_test = cor.test(jobs[,3],jobs$Visualizaciones,method = "spearman")
-for (i in 1:(ncol(jobs) - 1)) {
-  if (is.integer(jobs[,i]) | is.numeric(jobs[,i])) {
-    spearman_test = cor.test(jobs[,i],jobs$Visualizaciones,method = "spearman")
-    corr_coef = spearman_test$estimate
-    p_val = spearman_test$p.value
-    # Add row to matrix
-    pair = matrix(ncol = 2, nrow = 1)
-    pair[1][1] = corr_coef
-    pair[2][1] = p_val
-    corr_matrix <- rbind(corr_matrix, pair)
-    rownames(corr_matrix)[nrow(corr_matrix)] <- colnames(jobs)[i]
-  }
-}
-print(corr_matrix)
-
-anova_fare <- aov(lat ~ Solicitudes, Remote)
-summary(anova_fare)
-
-anova_age <- aov(lon ~ Solicitudes, Remote)
-summary(anova_age)
-
 ```
 
 ### 4.3.2 Modelo de regresión lineal
@@ -483,7 +428,7 @@ newdata <- data.frame(
   lon = 2.17,
   Visualizaciones = 37
 )
-# Predecir el precio
+# Predecir el número de solicitudes respecto a la latitud, longitud y el número de visualizaciones.
 predict(modelo, newdata)
 
 ```
@@ -492,7 +437,7 @@ predict(modelo, newdata)
 #TODO EXPLICAR RESULTADOS
 ```
 
-## 4.3.3 Modelo de Regresión logistica
+## 4.3.3 Modelo de Regresión logística
 
 ```{r}
 #TODO EXPLICAR
@@ -521,30 +466,6 @@ tail(jobs, 10)
 #TODO EXPLICAR RESULTADOS
 ```
 
-## 4.3.4 Clasificación Y/O Clustering
-
-```{r}
-#TODO EXPLICAR
-```
-
-```{r}
-
-library(C50)
-dim(jobs)
-
-str(jobs)
-
-Y <- jobs$
-X <- jobs[,5]
-model <- C50::C5.0(jobs$Type, jobs$Level,rules=TRUE )
-summary(model)
-
-```
-
-```{r}
-#TODO EXPLICAR RESULTADOS
-```
-
 # 5. Representación de los resultados a partir de las tablas y gráficas.
 
 ```{r}
@@ -554,6 +475,30 @@ summary(model)
 
 ```{r}
 #TODO FALTA GRAFICAS Diferencias entre localizaciones. Entre latitudes positivas y negativas. Entre Remoto o no según cada localizacion. Mapas de localizaciones. WordCloud de localizaciones y tabla de frecuencias de palabras. Top industries grafica de industrias mas comunes segun localizacion.
+jobs_merged %>% 
+  group_by(dataset) %>% 
+  count(Level) %>%
+  mutate(freq = round(n / sum(n) * 100, 0)) %>% 
+  ggplot(mapping = aes(y = n, x = dataset, color=Level, fill=Level)) + geom_bar( stat="identity") + geom_text(aes(label = paste(freq, "%")), color="black") + facet_wrap(~Level)+ theme(axis.text.x = element_text(angle = 55, hjust=1))
+
+jobs_merged %>% 
+  group_by(dataset) %>% 
+  count(Type) %>%
+  mutate(freq = round(n / sum(n) * 100, 0)) %>% 
+  ggplot(mapping = aes(y = n, x = dataset, color=Type, fill=Type)) + geom_bar( stat="identity") + geom_text(aes(label = paste(freq, "%")), color="black") + facet_wrap(~Type)+ theme(axis.text.x = element_text(angle = 55, hjust=1))
+
+jobs_merged %>% 
+  group_by(dataset) %>% 
+  count(Quick.Application) %>%
+  mutate(freq = round(n / sum(n) * 100, 0)) %>% 
+  ggplot(mapping = aes(y = n, x = dataset, color=Quick.Application, fill=Quick.Application)) + geom_bar( stat="identity") + geom_text(aes(label = paste(freq, "%")), color="black") + facet_wrap(~Quick.Application)+ theme(axis.text.x = element_text(angle = 55, hjust=1))
+
+jobs_merged %>% 
+  group_by(dataset) %>% 
+  count(Empleados) %>%
+  mutate(freq = round(n / sum(n) * 100, 0)) %>% 
+  ggplot(mapping = aes(y = n, x = dataset, color=Empleados, fill=Empleados)) + geom_bar( stat="identity") + geom_text(aes(label = paste(freq, "%")), color="black") + facet_wrap(~Empleados)+ theme(axis.text.x = element_text(angle = 55, hjust=1))
+
 ```
 
 ## 5.1 Mapas por localización y a nivel global
@@ -564,96 +509,65 @@ summary(model)
 
 ```{r}
 
-NI <- map_data("world")
+NI_world <- map_data("world")
 
-p <- jobs_merged %>%
+p_world <- jobs_merged %>%
   ggplot() +
-    geom_polygon(data = NI, aes(x=long, y = lat, group = group), fill="grey", alpha=0.3) +
+    geom_polygon(data = NI_world, aes(x=long, y = lat, group = group), fill="grey", alpha=0.3) +
     geom_count(aes(x=lon, y=lat)) +
     scale_size_continuous(range=c(0.01,3)) +
     scale_color_viridis(option="inferno") +
     theme_void() +
-    # ylim(35,45) +
     coord_map() +
     theme(legend.position = "none")
-p
+p_world
 
-NI <- map_data("world") %>%
-  filter(region == "UK")
-p <- Scotland %>%
+p_remote <- jobs_merged[which(jobs_merged$dataset=="Remote"),] %>%
   ggplot() +
-    geom_polygon(data = NI, aes(x=long, y = lat, group = group), fill="grey", alpha=0.3) +
+    geom_polygon(data = NI_world, aes(x=long, y = lat, group = group), fill="grey", alpha=0.3) +
     geom_count(aes(x=lon, y=lat)) +
-    scale_size_continuous(range=c(1,3)) +
+    scale_size_continuous(range=c(0.01,3)) +
     scale_color_viridis(option="inferno") +
     theme_void() +
     coord_map() +
     theme(legend.position = "none")
-p
+p_remote
 
-world_map <- map_data("world")
-ggplot(world_map, aes(x = long, y = lat, group = group)) +
-  geom_polygon(fill="lightgray", colour = "white")
-
-world <- map_data("world")
-head(world)
-
-locs <- c('Jiron Cuzco 423, Magdalena del Mar', 'Av Nicolas Arriola 500, La Victoria')
-geocode(locs)
-
-geocodeAdddress <- function(address) {
-  require(RJSONIO)
-  url <- "http://maps.google.com/maps/api/geocode/json?address="
-  url <- URLencode(paste(url, address, "&sensor=false", sep = ""))
-  x <- fromJSON(url, simplify = FALSE)
-  if (x$status == "OK") {
-    out <- c(x$results[[1]]$geometry$location$lng,
-             x$results[[1]]$geometry$location$lat)
-  } else {
-    out <- NA
-  }
-  Sys.sleep(0.2)  # API only allows 5 requests per second
-  out
-}
-geocodeAdddress("Time Square, New York City")
-
-# Loop through the addresses to get the latitude and longitude of each address and add it to the
-# origAddress data frame in new columns lat and lon
-for(i in 1:nrow(jobs)){
-  # Print("Working...")
-  result <- geocode(jobs$Location[i], output = "latlona", source = "google")
-  jobs$lon[i] <- as.numeric(result[1])
-  jobs$lat[i] <- as.numeric(result[2])
-  jobs$geoAddress[i] <- as.character(result[3])
-}
-# Write a CSV file containing origAddress to the working directory
-write.csv(jobs, "geocoded.csv", row.names=FALSE)
-
-library(tmaptools)
-pubs_tmaptools <- geocode_OSM(Scotland$Location, details = TRUE, as.data.frame = TRUE)
-#Eliminar si contiene alrededores la localizacion
-Spain <- Spain[!grepl("alrededores", Spain[["Location"]]), ]
-# Eliminar y alrededores
-library(tidyverse)
-Spain$Location <- str_remove(Spain$Location, "^*y alrededores.*$")
-Spain$Location[which(Spain$Location == "Greater Barcelona Metropolitan Area")] <- "Barcelona"
-pubs_tmaptools2 <- geocode_OSM(Spain$Location, details = TRUE, as.data.frame = TRUE)
-
-Scotland<-merge(x=Scotland,y=pubs_tmaptools, by = 0, all= TRUE)
-Scotland<-na.omit(Scotland)
-
-library(stringi)
-Spain<-merge(x=Spain,y=pubs_tmaptools2, by = 0, all= TRUE)
-Spain<-na.omit(Spain)
-
-NI <- map_data("world") %>%
-  filter(region == "Spain")
-
-library(plotly)
-library(viridis)
-p <- Spain %>%
+NI_uk <- map_data("world") %>%
+  filter(region == "UK")
+p_uk <- jobs_merged[which(jobs_merged$dataset=="UK"),] %>%
   ggplot() +
-    geom_polygon(data = NI, aes(x=long, y = lat, group = group), fill="grey", alpha=0.3) +
+    geom_polygon(data = NI_uk, aes(x=long, y = lat, group = group), fill="grey", alpha=0.3) +
+    geom_count(aes(x=lon, y=lat)) +
+    scale_size_continuous(range=c(1,7)) +
+    scale_color_viridis(option="inferno") +
+    theme_void() +
+    coord_fixed(ratio = 1.3, 
+              xlim = c(-10,3), 
+              ylim = c(50, 59)) +
+    theme(legend.position = "none")
+p_uk
+
+NI_scotland <- map_data("world") %>%
+  filter(region == "UK")
+p_scotland <- jobs_merged[which(jobs_merged$dataset=="Scotland"),] %>%
+  ggplot() +
+    geom_polygon(data = NI_scotland, aes(x=long, y = lat, group = group), fill="grey", alpha=0.3) +
+    geom_count(aes(x=lon, y=lat)) +
+    scale_size_continuous(range=c(1,7)) +
+    scale_color_viridis(option="inferno") +
+    theme_void() +
+    coord_fixed(ratio = 1.3, 
+              xlim = c(-10,3), 
+              ylim = c(50, 59)) +
+    theme(legend.position = "none")
+p_scotland
+
+NI_spain <- map_data("world") %>%
+  filter(region == "Spain")
+p_spain <- jobs_merged[which(jobs_merged$dataset=="Spain"),] %>%
+  ggplot() +
+    geom_polygon(data = NI_spain, aes(x=long, y = lat, group = group), fill="grey", alpha=0.3) +
     geom_count(aes(x=lon, y=lat)) +
     scale_size_continuous(range=c(1,15)) +
     scale_color_viridis(option="inferno") +
@@ -661,124 +575,7 @@ p <- Spain %>%
     ylim(35,45) +
     coord_map() +
     theme(legend.position = "none")
-p
-
-NI <- map_data("world") %>%
-  filter(region == "UK")
-p <- Scotland %>%
-  ggplot() +
-    geom_polygon(data = NI, aes(x=long, y = lat, group = group), fill="grey", alpha=0.3) +
-    geom_count(aes(x=lon, y=lat)) +
-    scale_size_continuous(range=c(1,3)) +
-    scale_color_viridis(option="inferno") +
-    theme_void() +
-    coord_map() +
-    theme(legend.position = "none")
-p
-
-library(tmaptools)
-WorldWide$Location[which(WorldWide$Location == "Cracow, Lesser Poland District, Poland")] <- "Cracow, Poland"
-WorldWide$Location[which(WorldWide$Location == "Barcelona y alrededores")] <- "Barcelona, Spain"
-WorldWide$Location[which(WorldWide$Location == "New York City Metropolitan Area")] <- "New York"
-WorldWide$Location[which(WorldWide$Location == "Hong Kong, Hong Kong SAR")] <- "Hong Kong"
-WorldWide$Location[which(WorldWide$Location == "Burnaby (Maywood / Marlborough / Oakalla / Windsor), V5H, CA")] <- "Burnaby"
-WorldWide$Location[which(WorldWide$Location == "District Brno-City, Czech Republic")] <- "Czech Republic"
-WorldWide$Location[which(WorldWide$Location == "Silkeborg, Middle Jutland, Denmark")] <- "Denmark"
-WorldWide$Location[which(WorldWide$Location == "Prague, The Capital, Czech Republic")] <- "Prague"
-WorldWide$Location[which(WorldWide$Location == "Kuala Lumpur, Federal Territory of Kuala Lumpur, Malaysia")] <- "Malaysia"
-WorldWide$Location[which(WorldWide$Location == "Genève et périphérie")] <- "Genève"
-WorldWide$Location[which(WorldWide$Location == "Dallas-Fort Worth Metroplex")] <- "Dallas"
-WorldWide$Location[which(WorldWide$Location == "Raleigh-Durham-Chapel Hill Area")] <- "Raleigh"
-WorldWide$Location[which(WorldWide$Location == "Santiago de Compostela y alrededores")] <- "Santiago de Compostela"
-WorldWide$Location[which(WorldWide$Location == "Herzliyya, Tel Aviv, Israel")] <- "Herzliya"
-WorldWide$Location[which(WorldWide$Location == "New Territories, Hong Kong SAR")] <- "Hong Kong"
-# No results found for "Cracow, Lesser Poland District, Poland".
-# No results found for "Barcelona y alrededores".
-# No results found for "New York City Metropolitan Area".
-# No results found for "Hong Kong, Hong Kong SAR".
-# No results found for "New York City Metropolitan Area".
-# No results found for "Burnaby (Maywood / Marlborough / Oakalla / Windsor), V5H, CA".
-# No results found for "District Brno-City, Czech Republic".
-# No results found for "New York City Metropolitan Area".
-# No results found for "Silkeborg, Middle Jutland, Denmark".
-# No results found for "Prague, The Capital, Czech Republic".
-# No results found for "Kuala Lumpur, Federal Territory of Kuala Lumpur, Malaysia".
-# No results found for "Genève et périphérie".
-# No results found for "Dallas-Fort Worth Metroplex".
-# No results found for "Dallas-Fort Worth Metroplex".
-# No results found for "Raleigh-Durham-Chapel Hill Area".
-# No results found for "Santiago de Compostela y alrededores".
-# No results found for "Herzliyya, Tel Aviv, Israel".
-# No results found for "New Territories, Hong Kong SAR".
-pubs_tmaptools3 <- geocode_OSM(WorldWide$Location, details = TRUE, as.data.frame = TRUE)
-WorldWide<-merge(x=WorldWide,y=pubs_tmaptools3, by = 0, all= TRUE)
-WorldWide<-na.omit(WorldWide)
-NI <- map_data("world")
-p <- WorldWide %>%
-  ggplot() +
-    geom_polygon(data = NI, aes(x=long, y = lat, group = group), fill="grey", alpha=0.3) +
-    geom_count(aes(x=lon, y=lat)) +
-    scale_size_continuous(range=c(0.01,3)) +
-    scale_color_viridis(option="inferno") +
-    theme_void() +
-    coord_map() +
-    theme(legend.position = "none")
-p
-
-Remote$Location[which(Remote$Location == "Raleigh-Durham-Chapel Hill Area")] <- "Raleigh"
-Remote$Location[which(Remote$Location == "New York City Metropolitan Area")] <- "New York"
-Remote$Location[which(Remote$Location == "Des Moines Metropolitan Area")] <- "Des Moines"
-Remote$Location[which(Remote$Location == "Greater Minneapolis-St. Paul Area")] <- "Minneapolis"
-Remote$Location[which(Remote$Location == "Greater Munich Metropolitan Area")] <- "Munich"
-Remote$Location[which(Remote$Location == "Gurgaon Sub-District, Haryana, India")] <- "Gurgaon"
-Remote$Location[which(Remote$Location == "Barcelona y alrededores")] <- "Barcelona"
-Remote$Location[which(Remote$Location == "Dallas-Fort Worth Metroplex")] <- "Dallas"
-Remote$Location[which(Remote$Location == "Village of Mayfield, OH, US")] <- "Cleveland"
-Remote$Location[which(Remote$Location == "Kraków i okolice")] <- "Kraków"
-# No results found for "New York City Metropolitan Area".
-# No results found for "Raleigh-Durham-Chapel Hill Area".
-# No results found for "New York City Metropolitan Area".
-# No results found for "New York City Metropolitan Area".
-# No results found for "New York City Metropolitan Area".
-# No results found for "New York City Metropolitan Area".
-# No results found for "New York City Metropolitan Area".
-# No results found for "New York City Metropolitan Area".
-# No results found for "Des Moines Metropolitan Area".
-# No results found for "New York City Metropolitan Area".
-# No results found for "New York City Metropolitan Area".
-# No results found for "Greater Minneapolis-St. Paul Area".
-# No results found for "New York City Metropolitan Area".
-# No results found for "Greater Munich Metropolitan Area".
-# No results found for "New York City Metropolitan Area".
-# No results found for "Gurgaon Sub-District, Haryana, India".
-# No results found for "Barcelona y alrededores".
-# No results found for "New York City Metropolitan Area".
-# No results found for "Dallas-Fort Worth Metroplex".
-# No results found for "Village of Mayfield, OH, US".
-# No results found for "New York City Metropolitan Area".
-# No results found for "Dallas-Fort Worth Metroplex".
-# No results found for "Greater Minneapolis-St. Paul Area".
-# No results found for "New York City Metropolitan Area".
-# No results found for "New York City Metropolitan Area".
-# No results found for "New York City Metropolitan Area".
-# No results found for "Dallas-Fort Worth Metroplex".
-# No results found for "New York City Metropolitan Area".
-# No results found for "Kraków i okolice".
-pubs_tmaptools4 <- geocode_OSM(Remote$Location, details = TRUE, as.data.frame = TRUE)
-Remote<-merge(x=Remote,y=pubs_tmaptools4, by = 0, all= TRUE)
-Remote<-na.omit(Remote)
-NI <- map_data("world")
-p <- Remote %>%
-  ggplot() +
-    geom_polygon(data = NI, aes(x=long, y = lat, group = group), fill="grey", alpha=0.3) +
-    geom_count(aes(x=lon, y=lat)) +
-    scale_size_continuous(range=c(0.01,3)) +
-    scale_color_viridis(option="inferno") +
-    theme_void() +
-    coord_map() +
-    theme(legend.position = "none")
-p
-
+p_spain
 
 ```
 
@@ -786,42 +583,27 @@ p
 #TODO EXPLICAR RESULTADOS
 ```
 
-## 5.2 Patrones de publicación de trabajos
+## 5.2 Patrones de publicación de trabajos por fecha
 
 ```{r}
 
-Remote %<>%
-  mutate(Date= as.Date(Date, format= "%Y-%m-%d"))
-Remote$Solicitudes <- as.numeric(Remote$Solicitudes)
-Remote$Visualizaciones <- as.numeric(Remote$Visualizaciones)
-WorldWide %<>%
-  mutate(Date= as.Date(Date, format= "%Y-%m-%d"))
-UK %<>%
-  mutate(Date= as.Date(Date, format= "%Y-%m-%d"))
-Spain %<>%
-  mutate(Date= as.Date(Date, format= "%Y-%m-%d"))
-Scotland %<>%
-  mutate(Date= as.Date(Date, format= "%Y-%m-%d"))
+jobs_date_pattern <- jobs_merged
 
-Remote$Date[which(Remote$Date <= "2020-10-01")] <- NA
+jobs_date_pattern <- jobs_date_pattern %>%
+  filter(Date >= "2020-10-01")
 
-Remote<-na.omit(Remote)
+nrow(jobs_date_pattern)
 
-hist(Remote$Date,"days")
-hist(Remote$Solicitudes)
-hist(Remote$Visualizaciones)
-hist(WorldWide$Date,"days")
-hist(UK$Date,"days")
-hist(Spain$Date,"days")
-hist(Scotland$Date,"days")
+hist(jobs_date_pattern$Date,"days")
 
+hist(jobs_date_pattern[which(jobs_date_pattern$dataset=="Spain"),"Date"],"days")
 ```
 
 ```{r}
 #TODO EXPLICAR RESULTADOS
 ```
 
-## 5.3 Nube de palabras más usadas
+## 5.3 Nube de palabras más usadas en UK
 
 ```{r}
 #TODO EXPLICAR
@@ -829,19 +611,48 @@ hist(Scotland$Date,"days")
 
 ```{r}
 
-df1 <- data.frame(table(unlist(strsplit(tolower(Scotland$Description), " "))))
+UK$Description <- gsub(",", "", UK$Description, fixed = TRUE)
+UK$Description <- gsub(".", "", UK$Description, fixed = TRUE)
+UK$Description <- gsub("/", "", UK$Description, fixed = TRUE)
 
-borrar <- c("and"," ","","to","the","of","a","in","with","for","you","our","is","as","we","on","or","are","be","will","an","your","work","working","that","this","have","at","their","role","from","skills","by","looking","what","-","can","all","across","they","who","such","new","more","if","through")
+df1 <- data.frame(table(unlist(strsplit(tolower(UK$Description), " "))))
+
+borrar <- c("and"," ","","to","the","of","a","in","with","for","you","our","is","as","we","on","or","are","be","will","an","your","work","working","that","this","have","at","their","role","from","skills","by","looking","what","–","can","all","across","they","who","such","new","more","if","through","&","any","when","well","us","uk","take","not","also","these","there","get","(eg","while","so","further","per","youll","using","based","including","within","where","has","when","able","it","other","it´s","than","we’re","we're","we’ve","we’ll","we've","we’d","style='font-weight:","we'll","we'd","(we","about","many","you’ll","you'll","you’re","you're","you?","you!","you’d","you’ve","you've","you'd","them","out","over","may","been","here","those","do","one","but","into","must","just","its","etc","some","no","should","every","-","then","come","each","*","	+")
 df1 <- df1[!(df1$Var1 %in% borrar),]
+
+set.seed(1234)
 
 wordcloud(words = df1$Var1, freq = df1$Freq, min.freq = 1, max.words=200, random.order=FALSE, rot.per=0.35, colors=brewer.pal(8,"Dark2"))
 
 word_dataframe <- df1[order(-df1$Freq),]
 
 wordcloud2(data=word_dataframe[2:400,], size=1.6, color='random-dark')
+
+word_dataframe[1:25,]
 ```
+
+Entre los lenguajes de programación, herramientas y plataformas/servicios cabe destacar estas coincidencias:
+
+- R: 223 coincidencias
+- SQL: 451 coincidencias
+- AI: 308 coincidencias
+- Python: 708 coincidencias
+- BI: 136 coincidencias
+- ETL: 183 coincidencias
+- ML: 236 coincidencias
+- Design: 881 coincidencias
+- Azure: 225 coincidencias
+- Cloud: 473 coincidencias
+- AWS: 258 coincidencias
+
+Lugares:
+- London: 371 coincidencias
+- home: 152 coincidencias
+- remote: 176 coincidencias
 
 ```{r}
 #TODO EXPLICAR RESULTADOS
 ```
+
+# 6. Resolución del problema. Conclusiones.
 
