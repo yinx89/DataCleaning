@@ -19,12 +19,6 @@ output:
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-Hellodsfsdf
-
-asdf
-asdf
-asd
-f
 
 ```{r 1, message=FALSE, warning=FALSE}
 # Carga de librerías
@@ -35,6 +29,14 @@ library(highcharter)
 library(maps)
 library(ggmap)
 library(ggpubr)
+library(tmaptools)
+library(tidyverse)
+library(plotly)
+library(viridis)
+library(stringi)
+library(polycor)
+library(reshape2)
+library(magrittr)
 ```
 
 # 1. Descripción del dataset
@@ -43,7 +45,15 @@ El dataset es un listado de ofertas de trabajo publicadas en Linkedin para cienc
 
 Consta de 6 archivos CSV con las ofertas encontradas a nivel de Escocia, Reino Unido, España, Mundo y remoto.
 
+```{r}
+#TODO ¿Porque es importante y qué pregunta/problema pretende responder? AMPLIAR
+```
+
 # 2. Integración y selección de los datos de interés a analizar
+
+```{r}
+#TODO BREVE INTRODUCCIÓN
+```
 
 El primer paso es integrar los distintos archivos en un mismo dataset.
 
@@ -69,6 +79,10 @@ Quitamos la primera columna ya que no es más que un índice que no aporta ningu
 
 ```{r}
 jobs <- jobs[2:18]
+```
+
+```{r}
+#TODO EXPLICACIÓN de las variables (COPIAR DE LA ANTERIOR PRACTICA)
 ```
 
 # 3. Limpieza de los datos
@@ -104,10 +118,10 @@ jobs[jobs=="None"] <-- NA
 ```
 
 Para corrgir los tipos de datos vamos a ver qué variables se podrían convertir a tipo factor.
+
 ```{r}
 sapply(jobs, function(x) length(unique(x)))
 ```
-
 
 Corregimos los tipos de los datos.
 
@@ -126,6 +140,10 @@ jobs$dataset <- as.factor(jobs$dataset)
 Nos quedamos solo con las ofertas publicadas a partir de...
 
 ```{r}
+#TODO "ESTO SERIA SOLO EN VISUALIZACIONES POR FECHA"
+```
+
+```{r}
 jobs <- jobs %>% 
   filter(Date >= "2020-10-01")
 ```
@@ -133,7 +151,6 @@ jobs <- jobs %>%
 ```{r}
 nrow(jobs)
 ```
-
 
 Mostramos la distribución de los valores perdidos.
 
@@ -163,6 +180,7 @@ jobs <- jobs %>%
 ```
 
 Comprobamos cómo quedan ahora los valores perdidos.
+
 ```{r warning=FALSE}
 sum(is.na(jobs))
 aggr(jobs, numbers=TRUE, sortVars=TRUE, labels=names(jobs),
@@ -203,10 +221,21 @@ ggplot(jobs, aes(x=Level, y=Visualizaciones, color=Level)) +
 ```
 
 ```{r}
+#TODO EXPLICAR RESULTADOS
+```
+
+```{r}
 tail(sort(boxplot.stats(jobs$Solicitudes)$out),5)
 ```
 
 Voy a observar las tres ofertas de trabajo que superan las 3000 solicitudes.
+
+```{r}
+#TODO ¿es necesario estos apartados de acontinuacion? Yo lo eliminaría, no aporta nada
+
+# FALTARÍA PONERLO EXACTAMENTE COMO PONE EN EL ENUNCIADO DE LA PRÁCTICA. PUNTOS 3.1 Y 3.2
+# PARA LOS VALORES EXTREMOS, LO HACEMOS PARA LAS FECHAS POR EJEMPLO. SE PUEDE COMENTAR AHORA
+```
 
 ```{r}
 jobs[which(jobs$Solicitudes %in% tail(sort(boxplot.stats(jobs$Solicitudes)$out),3)),]
@@ -227,6 +256,52 @@ ggplot(jobs, aes(x=Level, y=Solicitudes, color=Level)) +
 
 # 4. Análisis de los datos.
 
+## 4.1. Selección de los grupos de datos que se quieren analizar/comparar (planificación de los análisis a aplicar)
+
+```{r}
+#TODO EXPLICAR
+```
+
+### 4.1.1 Preparación de los datos de Longitud y Latitud.
+
+```{r}
+#TODO EXPLICAR
+```
+
+```{r}
+jobs$Location <- str_remove(jobs$Location, "^*y alrededores.*$")
+jobs$Location[which(jobs$Location == "Greater Barcelona Metropolitan Area")] <- "Barcelona"
+jobs$Location[which(jobs$Location == "Cracow, Lesser Poland District, Poland")] <- "Cracow, Poland"
+jobs$Location[which(jobs$Location == "New York City Metropolitan Area")] <- "New York"
+jobs$Location[which(jobs$Location == "Hong Kong, Hong Kong SAR")] <- "Hong Kong"
+jobs$Location[which(jobs$Location == "Burnaby (Maywood / Marlborough / Oakalla / Windsor), V5H, CA")] <- "Burnaby"
+jobs$Location[which(jobs$Location == "District Brno-City, Czech Republic")] <- "Czech Republic"
+jobs$Location[which(jobs$Location == "Silkeborg, Middle Jutland, Denmark")] <- "Denmark"
+jobs$Location[which(jobs$Location == "Prague, The Capital, Czech Republic")] <- "Prague"
+jobs$Location[which(jobs$Location == "Kuala Lumpur, Federal Territory of Kuala Lumpur, Malaysia")] <- "Malaysia"
+jobs$Location[which(jobs$Location == "Genève et périphérie")] <- "Genève"
+jobs$Location[which(jobs$Location == "Dallas-Fort Worth Metroplex")] <- "Dallas"
+jobs$Location[which(jobs$Location == "Raleigh-Durham-Chapel Hill Area")] <- "Raleigh"
+jobs$Location[which(jobs$Location == "Herzliyya, Tel Aviv, Israel")] <- "Herzliya"
+jobs$Location[which(jobs$Location == "New Territories, Hong Kong SAR")] <- "Hong Kong"
+jobs$Location[which(jobs$Location == "Des Moines Metropolitan Area")] <- "Des Moines"
+jobs$Location[which(jobs$Location == "Greater Minneapolis-St. Paul Area")] <- "Minneapolis"
+jobs$Location[which(jobs$Location == "Greater Munich Metropolitan Area")] <- "Munich"
+jobs$Location[which(jobs$Location == "Gurgaon Sub-District, Haryana, India")] <- "Gurgaon"
+jobs$Location[which(jobs$Location == "Village of Mayfield, OH, US")] <- "Cleveland"
+jobs$Location[which(jobs$Location == "Kraków i okolice")] <- "Kraków"
+
+OSM_jobs <- geocode_OSM(jobs$Location, details = TRUE, as.data.frame = TRUE)
+jobs_merged<-merge(x=jobs,y=OSM_jobs[2:3], by = 0, all= TRUE)
+
+head(OSM_jobs)
+head(jobs_merged)
+```
+
+```{r}
+#TODO EXPLICAR RESULTADOS
+```
+
 ## 4.2. Comprobación de la normalidad y homogeneidad de la varianza.
 
 En el dataset se obtienen XX variables, XX categóricas y XX numéricas. En este apartado se busca verificar si las variables numéricas (lat, lon, Solicitudes y Visualizaciones) siguen una distribución normal.
@@ -234,26 +309,19 @@ En el dataset se obtienen XX variables, XX categóricas y XX numéricas. En este
 Para verificarlo, primero se realizará un estudio visual de la normalidad mediante la gráfica quantile-quantile (Q-Q) que dibuja la correlación entre una muestra dada y la distribución normal. En esta primera gráfica se podrá observar el grado de aproximación o similitud con la línea de referencia de 45 grados. Además, también se realizará el estudio visual sobre el histograma de la variable
 
 ```{r}
+#TODO TODAVIA FALTA EJECUTAR CON LA VARIABLE EMPLEADOS CORRECTAMENTE (TIPO FACTOR)
+```
 
-#TODO HACER PARA CADA DATASET
-
-# Comprobación de la normalidad para Remote
-
-# Esto se debera realizar en apartados anteriores
-Remote$Solicitudes <- as.numeric(Remote$Solicitudes)
-Remote$Visualizaciones <- as.numeric(Remote$Visualizaciones)
-Remote<-na.omit(Remote)
-# Nos quedamos solo con la latitud y la longitud. El resto de variables de OSM deberán ser eliminadas en apartados anteriores.
-# Tambien se deberia haber mezclado los dataframe de latitud y longitud en el original.
+```{r}
 
 par(mfrow=c(2,2))
-for(i in 1:ncol(Remote)) {
-  if (is.numeric(Remote[,i])){
-    qqnorm(Remote[,i],main = paste("Normal Q-Q Plot for ",colnames(Remote)[i]))
-    qqline(Remote[,i],col="red")
-    hist(Remote[,i],
-      main=paste("Histogram for ", colnames(Remote)[i]),
-      xlab=colnames(Remote)[i], freq = FALSE)
+for(i in 1:ncol(jobs_merged)) {
+  if (is.numeric(jobs_merged[,i])){
+    qqnorm(jobs_merged[,i],main = paste("Normal Q-Q Plot for ",colnames(jobs_merged)[i]))
+    qqline(jobs_merged[,i],col="red")
+    hist(jobs_merged[,i],
+      main=paste("Histogram for ", colnames(jobs_merged)[i]),
+      xlab=colnames(jobs_merged)[i], freq = FALSE)
   }
 }
 
@@ -263,10 +331,10 @@ No parece que las gráficas representen que claramente las variables siguen una 
 
 ```{r}
 
-for(i in 1:ncol(Remote)) {
-  if (is.numeric(Remote[,i])){
-    result <- shapiro.test(Remote[,i])
-    print(paste("Resultados para: ", colnames(Remote)[i]))
+for(i in 1:ncol(jobs_merged)) {
+  if (is.numeric(jobs_merged[,i])){
+    result <- shapiro.test(jobs_merged[,i])
+    print(paste("Resultados para: ", colnames(jobs_merged)[i]))
     print(result)
   }
 }
@@ -280,11 +348,11 @@ A continuación, se lleva a cabo la comprobación de homogeneidad de las varianz
 
 ```{r}
 
-fligner.test(Visualizaciones ~ lat, Remote)
-fligner.test(Visualizaciones ~ lon, Remote)
-fligner.test(Solicitudes ~ lat, Remote)
-fligner.test(Solicitudes ~ lon, Remote)
-fligner.test(Visualizaciones ~ Solicitudes, Remote)
+fligner.test(Visualizaciones ~ lat, jobs_merged)
+fligner.test(Visualizaciones ~ lon, jobs_merged)
+fligner.test(Solicitudes ~ lat, jobs_merged)
+fligner.test(Solicitudes ~ lon, jobs_merged)
+fligner.test(Visualizaciones ~ Solicitudes, jobs_merged)
 
 ```
 
@@ -294,23 +362,73 @@ Se obtiene como resultado que las variables numéricas no son homogéneas según
 
 En función de los datos y el objetivo del estudio, aplicar pruebas de contraste de hipótesis, correlaciones, regresiones, etc. Aplicar al menos tres métodos de análisis diferentes.
 
-### 4.3.1 Grado de independencia y predictividad sobre la variable "Solicitudes".
+```{r}
+#TODO EXPLICAR QUE SE LLEVARA A CABO
+```
+
+### 4.3.1 Correlaciones.
 
 ```{r}
+#TODO INTRODUCCION
+```
+
+```{r}
+
+borrar <- c("Date","Row.names")
+jobs_corr <- jobs_merged[ , !(names(jobs_merged) %in% borrar)]
+
+corr_matrix<-hetcor(jobs_corr, ML=FALSE, std.err=FALSE)
+corr_matrix$correlations
+
+
+ggplot(
+  melt(corr_matrix$correlations),
+  aes(Var2, Var1, fill = value)
+)+
+geom_tile(color = "white")+
+scale_fill_gradient2(
+  low = "blue",
+  high = "red",
+  mid = "white",
+  midpoint = 0,
+  limit = c(-1,1),
+  space = "Lab",
+  name="Correlation") +
+theme_minimal()+ # minimal theme
+theme(
+  axis.text.x = element_text(
+  angle = 45, vjust = 1,
+  size = 12, hjust = 1))+
+coord_fixed()
+
+```
+
+```{r}
+#TODO EXPLICAR RESULTADOS
+```
+
+### 4.3.2 Grado de independencia y predictividad sobre la variable "Solicitudes".
+
+```{r}
+
+#TODO ES ESTO NECESARIO? SI NO, PODEMOS HACER OTRO ANÁLISIS DEL ESTILO PARA VER INDEPENDENCIA ENTRE VARIABLES O VER COMO LA LATITUD Y LA LONGITUD SON IMPORTANTES
+
+str(jobs)
+
 # Eliminar columnas dataframe
 
-borrar <- c("lat_min","lat_max","lon_min","lon_max","X")
-Remote <- Remote[ , !(names(Remote) %in% borrar)]
+borrar <- c("Date")
+jobs <- jobs[ , !(names(jobs) %in% borrar)]
 str(Remote)
 
 corr_matrix <- matrix(nc = 2, nr = 0)
 colnames(corr_matrix) <- c("estimate", "p-value")
 # Calcular el coeficiente de correlación para cada variable cuantitativa
 # con respecto al campo "precio"
-Remote[,length(Remote)]
-for (i in 1:(ncol(Remote) - 1)) {
-  if (is.integer(Remote[,i]) | is.numeric(Remote[,i])) {
-    spearman_test = cor.test(Remote[,i],Remote$Visualizaciones,method = "spearman")
+spearman_test = cor.test(jobs[,3],jobs$Visualizaciones,method = "spearman")
+for (i in 1:(ncol(jobs) - 1)) {
+  if (is.integer(jobs[,i]) | is.numeric(jobs[,i])) {
+    spearman_test = cor.test(jobs[,i],jobs$Visualizaciones,method = "spearman")
     corr_coef = spearman_test$estimate
     p_val = spearman_test$p.value
     # Add row to matrix
@@ -318,7 +436,7 @@ for (i in 1:(ncol(Remote) - 1)) {
     pair[1][1] = corr_coef
     pair[2][1] = p_val
     corr_matrix <- rbind(corr_matrix, pair)
-    rownames(corr_matrix)[nrow(corr_matrix)] <- colnames(Remote)[i]
+    rownames(corr_matrix)[nrow(corr_matrix)] <- colnames(jobs)[i]
   }
 }
 print(corr_matrix)
@@ -334,8 +452,12 @@ summary(anova_age)
 ### 4.3.2 Modelo de regresión lineal
 
 ```{r}
+#TODO EXPLICAR
+```
 
-remote_lat_positive<-Remote[which(Remote$lat>0),]
+```{r}
+
+remote_lat_positive<-jobs_merged[which(jobs_merged$lat>0),]
 ntrain <- nrow(remote_lat_positive)*0.8
 ntest <- nrow(remote_lat_positive)*0.2
 set.seed(12312)
@@ -354,39 +476,27 @@ mc_sl<-data.frame(
 colnames(mc_sl)<-c("Real","Predecido","Dif%")
 knitr::kable(mc_sl)
 
+# Predicción
+
+newdata <- data.frame(
+  lat = 41.38,
+  lon = 2.17,
+  Visualizaciones = 37
+)
+# Predecir el precio
+predict(modelo, newdata)
+
 ```
 
-
 ```{r}
-library(magrittr)
-Remote %<>%
-  mutate(Date= as.Date(Date, format= "%Y-%m-%d"))
-Remote$Solicitudes <- as.numeric(Remote$Solicitudes)
-Remote$Visualizaciones <- as.numeric(Remote$Visualizaciones)
-WorldWide %<>%
-  mutate(Date= as.Date(Date, format= "%Y-%m-%d"))
-UK %<>%
-  mutate(Date= as.Date(Date, format= "%Y-%m-%d"))
-Spain %<>%
-  mutate(Date= as.Date(Date, format= "%Y-%m-%d"))
-Scotland %<>%
-  mutate(Date= as.Date(Date, format= "%Y-%m-%d"))
-
-Remote$Date[which(Remote$Date <= "2020-10-01")] <- NA
-
-Remote<-na.omit(Remote)
-
-hist(Remote$Date,"days")
-hist(Remote$Solicitudes)
-hist(Remote$Visualizaciones)
-hist(WorldWide$Date,"days")
-hist(UK$Date,"days")
-hist(Spain$Date,"days")
-hist(Scotland$Date,"days")
-
+#TODO EXPLICAR RESULTADOS
 ```
 
 ## 4.3.3 Modelo de Regresión logistica
+
+```{r}
+#TODO EXPLICAR
+```
 
 ```{r}
 lgm <- glm(formula = Quick.Application ~ Solicitudes + Level + Recommended.Flavor, family = binomial(link=logit), data = jobs)
@@ -407,9 +517,80 @@ head(jobs, 10)
 tail(jobs, 10)
 ```
 
+```{r}
+#TODO EXPLICAR RESULTADOS
+```
+
+## 4.3.4 Clasificación Y/O Clustering
+
+```{r}
+#TODO EXPLICAR
+```
+
+```{r}
+
+library(C50)
+dim(jobs)
+
+str(jobs)
+
+Y <- jobs$
+X <- jobs[,5]
+model <- C50::C5.0(jobs$Type, jobs$Level,rules=TRUE )
+summary(model)
+
+```
+
+```{r}
+#TODO EXPLICAR RESULTADOS
+```
+
 # 5. Representación de los resultados a partir de las tablas y gráficas.
 
 ```{r}
+#TODO EXPLICAR
+```
+
+
+```{r}
+#TODO FALTA GRAFICAS Diferencias entre localizaciones. Entre latitudes positivas y negativas. Entre Remoto o no según cada localizacion. Mapas de localizaciones. WordCloud de localizaciones y tabla de frecuencias de palabras. Top industries grafica de industrias mas comunes segun localizacion.
+```
+
+## 5.1 Mapas por localización y a nivel global
+
+```{r}
+#TODO EXPLICAR
+```
+
+```{r}
+
+NI <- map_data("world")
+
+p <- jobs_merged %>%
+  ggplot() +
+    geom_polygon(data = NI, aes(x=long, y = lat, group = group), fill="grey", alpha=0.3) +
+    geom_count(aes(x=lon, y=lat)) +
+    scale_size_continuous(range=c(0.01,3)) +
+    scale_color_viridis(option="inferno") +
+    theme_void() +
+    # ylim(35,45) +
+    coord_map() +
+    theme(legend.position = "none")
+p
+
+NI <- map_data("world") %>%
+  filter(region == "UK")
+p <- Scotland %>%
+  ggplot() +
+    geom_polygon(data = NI, aes(x=long, y = lat, group = group), fill="grey", alpha=0.3) +
+    geom_count(aes(x=lon, y=lat)) +
+    scale_size_continuous(range=c(1,3)) +
+    scale_color_viridis(option="inferno") +
+    theme_void() +
+    coord_map() +
+    theme(legend.position = "none")
+p
+
 world_map <- map_data("world")
 ggplot(world_map, aes(x = long, y = lat, group = group)) +
   geom_polygon(fill="lightgray", colour = "white")
@@ -600,3 +781,67 @@ p
 
 
 ```
+
+```{r}
+#TODO EXPLICAR RESULTADOS
+```
+
+## 5.2 Patrones de publicación de trabajos
+
+```{r}
+
+Remote %<>%
+  mutate(Date= as.Date(Date, format= "%Y-%m-%d"))
+Remote$Solicitudes <- as.numeric(Remote$Solicitudes)
+Remote$Visualizaciones <- as.numeric(Remote$Visualizaciones)
+WorldWide %<>%
+  mutate(Date= as.Date(Date, format= "%Y-%m-%d"))
+UK %<>%
+  mutate(Date= as.Date(Date, format= "%Y-%m-%d"))
+Spain %<>%
+  mutate(Date= as.Date(Date, format= "%Y-%m-%d"))
+Scotland %<>%
+  mutate(Date= as.Date(Date, format= "%Y-%m-%d"))
+
+Remote$Date[which(Remote$Date <= "2020-10-01")] <- NA
+
+Remote<-na.omit(Remote)
+
+hist(Remote$Date,"days")
+hist(Remote$Solicitudes)
+hist(Remote$Visualizaciones)
+hist(WorldWide$Date,"days")
+hist(UK$Date,"days")
+hist(Spain$Date,"days")
+hist(Scotland$Date,"days")
+
+```
+
+```{r}
+#TODO EXPLICAR RESULTADOS
+```
+
+## 5.3 Nube de palabras más usadas
+
+```{r}
+#TODO EXPLICAR
+```
+
+```{r}
+
+df1 <- data.frame(table(unlist(strsplit(tolower(Scotland$Description), " "))))
+
+borrar <- c("and"," ","","to","the","of","a","in","with","for","you","our","is","as","we","on","or","are","be","will","an","your","work","working","that","this","have","at","their","role","from","skills","by","looking","what","-","can","all","across","they","who","such","new","more","if","through")
+df1 <- df1[!(df1$Var1 %in% borrar),]
+
+wordcloud(words = df1$Var1, freq = df1$Freq, min.freq = 1, max.words=200, random.order=FALSE, rot.per=0.35, colors=brewer.pal(8,"Dark2"))
+
+word_dataframe <- df1[order(-df1$Freq),]
+
+wordcloud2(data=word_dataframe[2:400,], size=1.6, color='random-dark')
+```
+
+```{r}
+#TODO EXPLICAR RESULTADOS
+```
+
