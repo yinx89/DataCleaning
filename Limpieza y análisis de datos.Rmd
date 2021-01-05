@@ -19,7 +19,6 @@ output:
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-
 ```{r 1, message=FALSE, warning=FALSE}
 # Carga de librerías
 library(dplyr)
@@ -49,15 +48,18 @@ Se pueden ver los datos y el código en el siguiente repositorio: [https://githu
 
 Consta de 6 archivos CSV con las ofertas encontradas a nivel de Escocia, Reino Unido, España, Mundo y remoto que unificaremos, limpiaremos y daremos formato para posteriormente analizar y buscar información relevante.
 
-```{r}
-#TODO ¿Porque es importante y qué pregunta/problema pretende responder? AMPLIAR
-```
+Trataremos de ir respondiendo a distintas preguntas que nos vayan durgiendo como pueden ser las siguientes:
+- ¿Qué variables son relevantes?
+- ¿Que diferencias hay segun la localizacion o paises?
+- ¿Es una opción los puestos en Remoto?
+- ¿Hay diferencias entre latitudes positivas y negativas?
+- ¿Existe correlación entre si hay quick application y si se trata de una empresa grande o no?
+- ¿Existe correlacion entre el tipo de puesto y el numero de solicitudes?
+- ¿Qué tipo de puestos de trabajo prioriza LinkedIn en sus resultados?
+- ¿Qué palabras son las más utilizadas en las descripciones de las ofertas de trabajo?
+
 
 # 2. Integración y selección de los datos de interés a analizar
-
-```{r}
-#TODO BREVE INTRODUCCIÓN
-```
 
 El primer paso es integrar los archivos de las distintas ubicaciones en un mismo dataframe con el que podamos trabajar.
 
@@ -76,7 +78,15 @@ jobs <- rbind(Scotland, Spain, UK, WorldWide, Remote)
 dim(jobs)
 ```
 
-Obtenemos un dataframe de `r nrow(jobs)` observaciones y `r ncol(jobs)` variables. Vamos a inspeccionar las variables.
+Obtenemos un dataframe de `r nrow(jobs)` observaciones y `r ncol(jobs)` variables. 
+
+Vemos las primeras observaciones del mismo.
+
+```{r}
+head(jobs)
+```
+
+Vamos a inspeccionar las variables.
 
 ```{r}
 str(jobs)
@@ -493,9 +503,7 @@ predict(modelo, newdata)
 
 ## 4.3.3 Modelo de Regresión logistica
 
-```{r}
-#TODO EXPLICAR
-```
+Hacemos un modelo de regresión logística con el que poder predecir si una oferta dispondrá de un sistema rápido para mandar la candidatura "Quick.Application".
 
 ```{r}
 lgm <- glm(formula = Quick.Application ~ Level + Type + Solicitudes + Visualizaciones + Recommended.Flavor, family = binomial(link=logit), data = jobs)
@@ -517,6 +525,7 @@ library(vcd)
 mosaic(matriz_confusion, shade = T, colorize = T,
        gp = gpar(fill = matrix(c("green3", "red2", "red2", "green3"), 2, 2)))
 ```
+
 Podemos ver que hay `r matriz_confusion[3]` falsos positivos y `r matriz_confusion[2]` falsos negativos.
 ```{r}
 sensibilidad <- label_percent(accuracy = 0.01)(matriz_confusion[4]/(matriz_confusion[4]+matriz_confusion[2]))
@@ -531,20 +540,11 @@ La sensibilidad es del `r sensibilidad` y la especificidad del `r especificidad`
 library(pROC)
 prob=predict(lgm, newdata=jobs, type="response")
 r=roc(response=jobs$Quick.Application, predictor=prob, data=data)
-## Setting levels: control = 0, case = 1
-## Setting direction: controls < cases
 plot (r)
 auc(r)
 ```
 
-
-```{r}
-head(jobs, 10)
-```
-
-```{r}
-tail(jobs, 10)
-```
+El modelo obtenido es bastante bueno ya que cuenta con un AUC de `r auc(r)` y con una sensibilidad y especificidad aceptables por lo que se puede decir que se puede determinar si habrá Quick.Application en función de la oferta.
 
 ```{r}
 #TODO EXPLICAR RESULTADOS
