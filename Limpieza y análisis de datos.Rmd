@@ -97,7 +97,7 @@ Al haber integrado varios archivos de búsquedas de ámbitos territoriales que s
 sum(duplicated(jobs[1:5]))
 ```
 
-Hay `r sum(duplicated(jobs[1:16]))` observaciones duplicadas así que las eliminamos.
+Hay `r sum(duplicated(jobs[1:16]))` observaciones duplicadas así que las eliminamos. Mantenemos los duplicados para preservar los valores de cada dataset y comparar posteriormente.
 
 ```{r}
 
@@ -154,21 +154,6 @@ jobs_with_duplicates$Empleados <- as.factor(jobs_with_duplicates$Empleados)
 jobs_with_duplicates$Quick.Application <- as.factor(jobs_with_duplicates$Quick.Application)
 jobs_with_duplicates$Recommended.Flavor <- as.factor(jobs_with_duplicates$Recommended.Flavor)
 jobs_with_duplicates$dataset <- as.factor(jobs_with_duplicates$dataset)
-```
-
-Nos quedamos solo con las ofertas publicadas a partir de...
-
-```{r}
-#TODO "ESTO SERIA SOLO EN VISUALIZACIONES POR FECHA"
-```
-
-```{r}
-jobs <- jobs %>% 
-  filter(Date >= "2020-10-01")
-```
-
-```{r}
-nrow(jobs)
 ```
 
 Mostramos la distribución de los valores perdidos.
@@ -285,6 +270,9 @@ jobs$Location[which(jobs$Location == "Kraków i okolice")] <- "Kraków"
 
 OSM_jobs <- geocode_OSM(jobs$Location, details = TRUE, as.data.frame = TRUE)
 jobs_merged<-merge(x=jobs,y=OSM_jobs[2:3], by = 0, all= TRUE)
+
+OSM_jobs_duplicates <- geocode_OSM(jobs_with_duplicates$Location, details = TRUE, as.data.frame = TRUE)
+jobs_merged_with_duplicates<-merge(x=jobs_with_duplicates,y=OSM_jobs_duplicates[2:3], by = 0, all= TRUE)
 
 head(OSM_jobs)
 head(jobs_merged)
@@ -475,25 +463,25 @@ tail(jobs, 10)
 
 ```{r}
 #TODO FALTA GRAFICAS Diferencias entre localizaciones. Entre latitudes positivas y negativas. Entre Remoto o no según cada localizacion. Mapas de localizaciones. WordCloud de localizaciones y tabla de frecuencias de palabras. Top industries grafica de industrias mas comunes segun localizacion.
-jobs_merged %>% 
+jobs_with_duplicates %>% 
   group_by(dataset) %>% 
   count(Level) %>%
   mutate(freq = round(n / sum(n) * 100, 0)) %>% 
   ggplot(mapping = aes(y = n, x = dataset, color=Level, fill=Level)) + geom_bar( stat="identity") + geom_text(aes(label = paste(freq, "%")), color="black") + facet_wrap(~Level)+ theme(axis.text.x = element_text(angle = 55, hjust=1))
 
-jobs_merged %>% 
+jobs_with_duplicates %>% 
   group_by(dataset) %>% 
   count(Type) %>%
   mutate(freq = round(n / sum(n) * 100, 0)) %>% 
   ggplot(mapping = aes(y = n, x = dataset, color=Type, fill=Type)) + geom_bar( stat="identity") + geom_text(aes(label = paste(freq, "%")), color="black") + facet_wrap(~Type)+ theme(axis.text.x = element_text(angle = 55, hjust=1))
 
-jobs_merged %>% 
+jobs_with_duplicates %>% 
   group_by(dataset) %>% 
   count(Quick.Application) %>%
   mutate(freq = round(n / sum(n) * 100, 0)) %>% 
   ggplot(mapping = aes(y = n, x = dataset, color=Quick.Application, fill=Quick.Application)) + geom_bar( stat="identity") + geom_text(aes(label = paste(freq, "%")), color="black") + facet_wrap(~Quick.Application)+ theme(axis.text.x = element_text(angle = 55, hjust=1))
 
-jobs_merged %>% 
+jobs_with_duplicates %>% 
   group_by(dataset) %>% 
   count(Empleados) %>%
   mutate(freq = round(n / sum(n) * 100, 0)) %>% 
@@ -511,7 +499,7 @@ jobs_merged %>%
 
 NI_world <- map_data("world")
 
-p_world <- jobs_merged %>%
+p_world <- jobs_merged_with_duplicates %>%
   ggplot() +
     geom_polygon(data = NI_world, aes(x=long, y = lat, group = group), fill="grey", alpha=0.3) +
     geom_count(aes(x=lon, y=lat)) +
@@ -522,7 +510,7 @@ p_world <- jobs_merged %>%
     theme(legend.position = "none")
 p_world
 
-p_remote <- jobs_merged[which(jobs_merged$dataset=="Remote"),] %>%
+p_remote <- jobs_merged_with_duplicates[which(jobs_merged_with_duplicates$dataset=="Remote"),] %>%
   ggplot() +
     geom_polygon(data = NI_world, aes(x=long, y = lat, group = group), fill="grey", alpha=0.3) +
     geom_count(aes(x=lon, y=lat)) +
@@ -535,7 +523,7 @@ p_remote
 
 NI_uk <- map_data("world") %>%
   filter(region == "UK")
-p_uk <- jobs_merged[which(jobs_merged$dataset=="UK"),] %>%
+p_uk <- jobs_merged_with_duplicates[which(jobs_merged_with_duplicates$dataset=="UK"),] %>%
   ggplot() +
     geom_polygon(data = NI_uk, aes(x=long, y = lat, group = group), fill="grey", alpha=0.3) +
     geom_count(aes(x=lon, y=lat)) +
@@ -550,7 +538,7 @@ p_uk
 
 NI_scotland <- map_data("world") %>%
   filter(region == "UK")
-p_scotland <- jobs_merged[which(jobs_merged$dataset=="Scotland"),] %>%
+p_scotland <- jobs_merged_with_duplicates[which(jobs_merged_with_duplicates$dataset=="Scotland"),] %>%
   ggplot() +
     geom_polygon(data = NI_scotland, aes(x=long, y = lat, group = group), fill="grey", alpha=0.3) +
     geom_count(aes(x=lon, y=lat)) +
@@ -565,7 +553,7 @@ p_scotland
 
 NI_spain <- map_data("world") %>%
   filter(region == "Spain")
-p_spain <- jobs_merged[which(jobs_merged$dataset=="Spain"),] %>%
+p_spain <- jobs_merged_with_duplicates[which(jobs_merged_with_duplicates$dataset=="Spain"),] %>%
   ggplot() +
     geom_polygon(data = NI_spain, aes(x=long, y = lat, group = group), fill="grey", alpha=0.3) +
     geom_count(aes(x=lon, y=lat)) +
@@ -587,7 +575,7 @@ p_spain
 
 ```{r}
 
-jobs_date_pattern <- jobs_merged
+jobs_date_pattern <- jobs_merged_with_duplicates
 
 jobs_date_pattern <- jobs_date_pattern %>%
   filter(Date >= "2020-10-01")
@@ -597,6 +585,10 @@ nrow(jobs_date_pattern)
 hist(jobs_date_pattern$Date,"days")
 
 hist(jobs_date_pattern[which(jobs_date_pattern$dataset=="Spain"),"Date"],"days")
+hist(jobs_date_pattern[which(jobs_date_pattern$dataset=="UK"),"Date"],"days")
+hist(jobs_date_pattern[which(jobs_date_pattern$dataset=="Scotland"),"Date"],"days")
+hist(jobs_date_pattern[which(jobs_date_pattern$dataset=="WorldWide"),"Date"],"days")
+hist(jobs_date_pattern[which(jobs_date_pattern$dataset=="Remote"),"Date"],"days")
 ```
 
 ```{r}
