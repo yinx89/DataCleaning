@@ -11,7 +11,7 @@ En este espacio presentamos la segunda práctica de la asignatura "Tipología y 
 
 ### Ficheros
 * M2.851_Prac2.pdf: documento PDF con las respuestas de la práctica
-* CLimpieza y análisis de datos.rmd: documento rmd con el código
+* data_cleaning.Rmd: documento rmd con el código
 * data:
     - Remote.csv: datos de las ofertas de empleo para trabajar en remoto
     - Scotland.csv: datos de las ofertas de empleo para trabajar en Escocia
