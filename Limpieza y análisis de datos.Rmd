@@ -19,7 +19,6 @@ output:
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-
 ```{r 1, message=FALSE, warning=FALSE}
 # Carga de librerías
 library(dplyr)
@@ -34,32 +33,38 @@ library(reshape2)
 library(wordcloud)
 library(wordcloud2)
 library(viridis)
+library(scales)
+library(magrittr)
 # library(highcharter)
 # library(maps)
 # library(ggmap)
 # library(ggpubr)
 # library(tidyverse)
 # library(plotly)
-# library(magrittr)
 ```
 
 # 1. Descripción del dataset
 
 El dataset es un listado de ofertas de trabajo publicadas en Linkedin para ciencia de datos (término "Data Scientist") que fue obtenido en la primera parte de esta práctica.
 
-Consta de 6 archivos CSV con las ofertas encontradas a nivel de Escocia, Reino Unido, España, Mundo y remoto.
+Se pueden ver los datos y el código en el siguiente repositorio: [https://github.com/InigoAB/DataCleaning](https://github.com/InigoAB/DataCleaning)
 
-```{r}
-#TODO ¿Porque es importante y qué pregunta/problema pretende responder? AMPLIAR
-```
+Consta de 6 archivos CSV con las ofertas encontradas a nivel de Escocia, Reino Unido, España, Mundo y remoto que unificaremos, limpiaremos y daremos formato para posteriormente analizar y buscar información relevante.
+
+Trataremos de ir respondiendo a distintas preguntas que nos vayan durgiendo como pueden ser las siguientes:
+- ¿Qué variables son relevantes?
+- ¿Que diferencias hay segun la localizacion o paises?
+- ¿Es una opción los puestos en Remoto?
+- ¿Hay diferencias entre latitudes positivas y negativas?
+- ¿Existe correlación entre si hay quick application y si se trata de una empresa grande o no?
+- ¿Existe correlacion entre el tipo de puesto y el numero de solicitudes?
+- ¿Qué tipo de puestos de trabajo prioriza LinkedIn en sus resultados?
+- ¿Qué palabras son las más utilizadas en las descripciones de las ofertas de trabajo?
+
 
 # 2. Integración y selección de los datos de interés a analizar
 
-```{r}
-#TODO BREVE INTRODUCCIÓN
-```
-
-El primer paso es integrar los distintos archivos en un mismo dataset.
+El primer paso es integrar los archivos de las distintas ubicaciones en un mismo dataframe con el que podamos trabajar.
 
 ```{r}
 Scotland <- read.csv("data/Scotland.csv", header=TRUE, sep=",", stringsAsFactors=FALSE)
@@ -73,21 +78,49 @@ UK$dataset <- "UK"
 WorldWide$dataset <- "WorldWide"
 Remote$dataset <- "Remote"
 jobs <- rbind(Scotland, Spain, UK, WorldWide, Remote)
+dim(jobs)
 ```
+
+Obtenemos un dataframe de `r nrow(jobs)` observaciones y `r ncol(jobs)` variables. 
+
+Vemos las primeras observaciones del mismo.
+
+```{r}
+head(jobs)
+```
+
+Vamos a inspeccionar las variables.
 
 ```{r}
 str(jobs)
 ```
 
 Quitamos la primera columna ya que no es más que un índice que no aporta ninguna información.
-
 ```{r}
-jobs <- jobs[2:18]
+jobs$X <- NULL
 ```
 
-```{r}
-#TODO EXPLICACIÓN de las variables (COPIAR DE LA ANTERIOR PRACTICA)
-```
+Todas las demás variables han quedado como de tipo carácter así que en el siguiente apartado haremos las transformaciones necesarias, de momento las explicamos.
+
+## Explicación de las variables
+Nos quedamos con las siguientes columnas
+- Job_ID: identificador de la oferta de empleo 
+- Date: fecha de publicación
+- Company_Name: nombre de la empresa 
+- Role: título o puesto de la oferta
+- Location: ubicación del puesto
+- Description: descripción del puesto (del que se puede extraer más información)
+- Level: nivel de experiencia requerida para el puesto
+- Type: tipo de contrato (jornada completa o parcial)
+- Functions: funciones del puesto de la oferta
+- Industries: sectores que involucra
+- Solicitudes: número de solicitudes enviadas a la oferta
+- Empleados: intervalo/número de empleados de la empresa
+- Quick Application (True/False): método de solicitud rápida por LinkedIn Emails: e-mails de contacto
+- Visualizaciones: número de visualizaciones que tiene la oferta
+- Recommended Flavor: tipo de oferta
+- dataset: dataset de origen de cada variable
+
 
 # 3. Limpieza de los datos
 
@@ -97,7 +130,7 @@ Al haber integrado varios archivos de búsquedas de ámbitos territoriales que s
 sum(duplicated(jobs[1:5]))
 ```
 
-Hay `r sum(duplicated(jobs[1:16]))` observaciones duplicadas así que las eliminamos. Mantenemos los duplicados para preservar los valores de cada dataset y comparar posteriormente.
+Hay `r sum(duplicated(jobs[1:5]))` observaciones duplicadas así que las eliminamos. Mantenemos los duplicados para preservar los valores de cada dataset y comparar posteriormente.
 
 ```{r}
 
@@ -109,7 +142,7 @@ jobs <- jobs %>%
 
 ## 3.1. Valores perdidos
 
-Buscamos valores perdidos.
+Buscamos valores perdidos a lo largo del dataframe.
 
 ```{r}
 sum(is.na(jobs))
@@ -117,7 +150,7 @@ sum(jobs=="")
 sum(jobs=="None")
 ```
 
-Sustituimos los valores en blanco por NA.
+Sustituimos los valores en blanco y "None" por NA.
 
 ```{r}
 jobs[jobs==""] <-- NA
@@ -126,13 +159,13 @@ jobs_with_duplicates[jobs_with_duplicates==""] <-- NA
 jobs_with_duplicates[jobs_with_duplicates=="None"] <-- NA
 ```
 
-Para corrgir los tipos de datos vamos a ver qué variables se podrían convertir a tipo factor.
+Para corregir los tipos de datos vamos a ver qué variables se podrían convertir a tipo factor viendo la cantidad de datos distintos que tiene cada una.
 
 ```{r}
 sapply(jobs, function(x) length(unique(x)))
 ```
 
-Corregimos los tipos de los datos.
+Todas las variables que tienen menos de 10 valores únicos las convertiremos a tipo factor. Date lo pasamos a formato fecha y Solicitudes y Visualizaciones a tipo numérico.
 
 ```{r}
 jobs$Date <- as.Date(jobs$Date, format="%Y-%m-%d")
@@ -154,16 +187,36 @@ jobs_with_duplicates$Empleados <- as.factor(jobs_with_duplicates$Empleados)
 jobs_with_duplicates$Quick.Application <- as.factor(jobs_with_duplicates$Quick.Application)
 jobs_with_duplicates$Recommended.Flavor <- as.factor(jobs_with_duplicates$Recommended.Flavor)
 jobs_with_duplicates$dataset <- as.factor(jobs_with_duplicates$dataset)
+
+summary(jobs)
+```
+
+#Cambiamos los niveles para el tipo de jornada ya que la gran mayoría de ofertas son para jornada completa. Dejamos solo los niveles "Jornada completa" y "Otra jornada".
+
+```{r}
+#Otra <- c("Contrato por obra", "Media jornada", "Otro", "Prácticas", "Temporal", "Voluntario")
+#jobs <- jobs %>%
+#  mutate(Type = fct_collapse(Type, "Otra jornada" = Otra))
+```
+
+#Parece que los niveles de factor de Empleados no están ordenados de una forma coherente así que los ordenamos.
+```{r}
+#levels(jobs$Empleados)
+```
+
+#Los ordenamos.
+```{r}
+#jobs$Empleados <- factor(jobs$Empleados, levels = c("2-10", "11-50", "51-200", "201-500", "501-1000", "1001-5000", "5001-10.000", "Más de 10.001"), exclude = NULL)
 ```
 
 Mostramos la distribución de los valores perdidos.
-
 ```{r warning=FALSE}
 sum(is.na(jobs))
 aggr(jobs, numbers=TRUE, sortVars=TRUE, labels=names(jobs),
 cex.axis=.7, gap=3, ylab=c("Missing data","Pattern"))
 ```
 
+Tratamos los valores perdidos numéricos sustituyéndolos por la mediana.
 ```{r}
 jobs <- jobs %>%
   group_by(Level, Quick.Application) %>%
@@ -173,9 +226,8 @@ jobs <- jobs %>%
     mutate(Visualizaciones = ifelse(is.na(Visualizaciones), median(Visualizaciones, na.rm = TRUE), Visualizaciones))
 ```
 
-Comprobamos cómo quedan ahora los valores perdidos.
-
-```{r warning=FALSE}
+Comprobamos cómo queda ahora la distribución de valores perdidos.
+```{r message=FALSE, warning=FALSE}
 sum(is.na(jobs))
 aggr(jobs, numbers=TRUE, sortVars=TRUE, labels=names(jobs),
 cex.axis=.7, gap=3, ylab=c("Missing data","Pattern"))
@@ -183,53 +235,53 @@ cex.axis=.7, gap=3, ylab=c("Missing data","Pattern"))
 
 Los valores perdidos se han reducido bastante y los que quedan se dejan así porque será importante para posteriores análisis.
 
-```{r message=FALSE, warning=FALSE}
+## 3.2. Identificación y tratamiento de valores extremos
 
+Empezamos haciendo una visualización sencilla de las variables susceptibles de tener valores aislados.
+```{r message=FALSE, warning=FALSE}
 grid.arrange(
   qplot(Date, data=jobs)+ theme(axis.text.x = element_text(angle = 25)),
-  qplot(Level, data=jobs)+ theme(axis.text.x = element_text(angle = 20, hjust=0.7)),
+  qplot(Level, data=jobs)+ theme(axis.text.x = element_text(angle = 20, hjust=0.7, size = 7)),
   qplot(Type, data=jobs)+ theme(axis.text.x = element_text(angle = 20, hjust=1)),
-  qplot(Solicitudes, data=jobs),
-  qplot(Empleados, data=jobs)+ theme(axis.text.x = element_text(angle = 20, hjust=1)),
-  qplot(Visualizaciones, data=jobs),
-  qplot(Recommended.Flavor, data=jobs)+ theme(axis.text.x = element_text(angle = 20, hjust=1))
+  qplot(Solicitudes, data=jobs)+ theme(axis.text.x = element_text(angle = 25)),
+  qplot(Empleados, data=jobs)+ theme(axis.text.x = element_text(angle = 30, hjust=0.7, size = 7)),
+  qplot(Visualizaciones, data=jobs)+ theme(axis.text.x = element_text(angle = 25)),
+  qplot(Recommended.Flavor, data=jobs)+ theme(axis.text.x = element_text(angle = 30, hjust=0.7, size = 7))
 )
 ```
 
-Hacemos un boxplot para cada una de las variables numéricas.
-
+Hacemos un boxplot para cada una de las variables numéricas agrupándolas en función de la variable "Level" para así visualizar mejor los valores numéricos.
 ```{r}
 ggplot(jobs, aes(x=Level, y=Solicitudes, color=Level)) + 
-  ggtitle("Diagrama de cajas") + 
+  ggtitle("Diagrama de cajas de Solicitudes") + 
   scale_color_brewer(palette="Dark2") +
   geom_boxplot() +
   theme(legend.position = "null") +
   geom_jitter(width = 0.1)
 
 ggplot(jobs, aes(x=Level, y=Visualizaciones, color=Level)) + 
-  ggtitle("Diagrama de cajas") + 
+  ggtitle("Diagrama de cajas de Visualizaciones") + 
   scale_color_brewer(palette="Dark2") +
   geom_boxplot() +
   theme(legend.position = "null") +
   geom_jitter(width = 0.1)
 ```
 
-```{r}
-#TODO EXPLICAR RESULTADOS
-```
+Como ya se veía por las gráficas anteriores son datos con colas muy largas a la derecha y algunos de los valores bastante aislados.
 
+Vamos a mirar los 5 valores más aislados de la variable "Solicitudes".
 ```{r}
 tail(sort(boxplot.stats(jobs$Solicitudes)$out),5)
 ```
 
-Voy a observar las tres ofertas de trabajo que superan las 3000 solicitudes.
+Vamos a observar las tres ofertas de trabajo que superan las 3000 solicitudes.
 
 ```{r}
-#TODO ¿es necesario estos apartados de acontinuacion? Yo lo eliminaría, no aporta nada
-
-# FALTARÍA PONERLO EXACTAMENTE COMO PONE EN EL ENUNCIADO DE LA PRÁCTICA. PUNTOS 3.1 Y 3.2
-# PARA LOS VALORES EXTREMOS, LO HACEMOS PARA LAS FECHAS POR EJEMPLO. SE PUEDE COMENTAR AHORA
+jobs[which(jobs$Solicitudes %in% tail(sort(boxplot.stats(jobs$Solicitudes)$out),3)),]
 ```
+
+Aunque sean valores extremos, observándolos en detalles parecen razonables y correctos así que los dejamos.
+
 
 # 4. Análisis de los datos.
 
@@ -427,28 +479,48 @@ predict(modelo, newdata)
 
 ## 4.3.3 Modelo de Regresión logística
 
+Hacemos un modelo de regresión logística con el que poder predecir si una oferta dispondrá de un sistema rápido para mandar la candidatura "Quick.Application".
+
 ```{r}
-#TODO EXPLICAR
+lgm <- glm(formula = Quick.Application ~ Level + Type + Solicitudes + Visualizaciones + Recommended.Flavor, family = binomial(link=logit), data = jobs)
+summary(lgm)
+```
+
+$${logit}(p_i)=\ln\left(\frac{p_i}{1-p_i}\right) = `r round(lgm_$coefficients[1],2)` + `r round(lgm_$coefficients[2],2)`x_1 + `r round(lgm_$coefficients[3],2)`x_2 + `r round(lgm_$coefficients[4],2)`x_3 `r round(lgm_$coefficients[4],2)`x_4 `r round(lgm_$coefficients[4],2)`x_5 `r round(lgm_$coefficients[4],2)`x_3
+6 `r round(lgm_$coefficients[4],2)`x_7 + `r round(lgm_$coefficients[4],2)`x_8 `r round(lgm_$coefficients[4],2)`x_9 `r round(lgm_$coefficients[4],2)`x_10 + `r round(lgm_$coefficients[4],2)`x_11 `r round(lgm_$coefficients[4],2)`x_12$$
+
+```{r 3.3.3.1}
+predicciones <- ifelse(test = lgm$fitted.values >= 0.5, yes = ">50%", no = "<50%")
+matriz_confusion <- table(lgm$model$Quick.Application, predicciones,
+                          dnn = c("observaciones", "predicciones"))
+matriz_confusion
 ```
 
 ```{r}
-lgm <- glm(formula = Quick.Application ~ Solicitudes + Level + Recommended.Flavor, family = binomial(link=logit), data = jobs)
-lgm
+library(vcd)
+mosaic(matriz_confusion, shade = T, colorize = T,
+       gp = gpar(fill = matrix(c("green3", "red2", "red2", "green3"), 2, 2)))
 ```
 
-$${logit}(p_i)=\ln\left(\frac{p_i}{1-p_i}\right) = `r round(lgm_$coefficients[1],2)` `r round(lgm_$coefficients[2],2)`x_1 + `r round(lgm_$coefficients[3],2)`x_2 `r round(lgm_$coefficients[4],2)`x_3$$
+Podemos ver que hay `r matriz_confusion[3]` falsos positivos y `r matriz_confusion[2]` falsos negativos.
+```{r}
+sensibilidad <- label_percent(accuracy = 0.01)(matriz_confusion[4]/(matriz_confusion[4]+matriz_confusion[2]))
+especificidad <- label_percent(accuracy = 0.01)(matriz_confusion[1]/(matriz_confusion[1]+matriz_confusion[3]))
+cat("sensibilidad: ",  sensibilidad)
+cat("\nespecificidad: ", especificidad)
+```
+
+La sensibilidad es del `r sensibilidad` y la especificidad del `r especificidad`.
 
 ```{r}
-summary(jobs)
+library(pROC)
+prob=predict(lgm, newdata=jobs, type="response")
+r=roc(response=jobs$Quick.Application, predictor=prob, data=data)
+plot (r)
+auc(r)
 ```
 
-```{r}
-head(jobs, 10)
-```
-
-```{r}
-tail(jobs, 10)
-```
+El modelo obtenido es bastante bueno ya que cuenta con un AUC de `r auc(r)` y con una sensibilidad y especificidad aceptables por lo que se puede decir que se puede determinar si habrá Quick.Application en función de la oferta.
 
 ```{r}
 #TODO EXPLICAR RESULTADOS
