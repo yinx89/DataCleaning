@@ -98,7 +98,6 @@ Para corrgir los tipos de datos vamos a ver qué variables se podrían convertir
 sapply(jobs, function(x) length(unique(x)))
 ```
 
-
 Corregimos los tipos de los datos.
 ```{r}
 jobs$Date <- as.Date(jobs$Date, format="%Y-%m-%d")
@@ -121,7 +120,6 @@ nrow(jobs)
 ```
 
 Nos hemos quedado con `r nrow(jobs)` observaciones.
-
 ```{r}
 summary(jobs)
 ```
