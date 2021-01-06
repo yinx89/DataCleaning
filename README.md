@@ -10,7 +10,7 @@ En este espacio presentamos la segunda práctica de la asignatura "Tipología y 
 - Iñigo Alvarez Bianchi
 
 ### Ficheros
-* M2.851_Prac2.pdf: documento PDF con las respuestas de la práctica
+* Solucion_data_cleaning.pdf: informe PDF con respuestas de la práctica
 * data_cleaning.Rmd: documento rmd con el código
 * data:
     - Remote.csv: datos de las ofertas de empleo para trabajar en remoto
@@ -18,3 +18,6 @@ En este espacio presentamos la segunda práctica de la asignatura "Tipología y 
     - Spain.csv: datos de las ofertas de empleo para trabajar en España
     - UK.csv: datos de las ofertas de empleo para trabajar en el Reino Unido
     - WorldWide.csv: datos de las ofertas de empleo a nivel mundial
+    - jobs_merged.csv: dataframe con los datos limpios y tratados
+    - jobs_merged_with_duplicates.csv: dataframe con los datos duplicados
+* data_cleaning_files: archivos, figuras y tablas generadas al renderizar
