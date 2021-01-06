@@ -10,7 +10,8 @@ En este espacio presentamos la segunda práctica de la asignatura "Tipología y 
 - Iñigo Alvarez Bianchi
 
 ### Ficheros
-* Solucion_data_cleaning.pdf: informe PDF con respuestas de la práctica
+* data_cleaning.pdf: informe PDF con respuestas de la práctica
+* data_cleaning.log: log de renderización
 * data_cleaning.Rmd: documento rmd con el código
 * data:
     - Remote.csv: datos de las ofertas de empleo para trabajar en remoto
