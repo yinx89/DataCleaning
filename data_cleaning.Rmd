@@ -1,0 +1,765 @@
+---
+title: "PRACTICA 2: LIMPIEZA Y VALIDACIÓN DE LOS DATOS"
+author: "Gines Molina e Iñigo Alvarez"
+date: "29/12/2020"
+output:
+  pdf_document: 
+    latex_engine: lualatex
+    toc: yes
+  word_document: default
+  html_document:
+    highlight: default
+    number_sections: yes
+    theme: cosmo
+    toc: yes
+    toc_depth: 2
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r 1, message=FALSE, warning=FALSE}
+# Carga de librerías
+library(dplyr)
+library(VIM)
+library(gridExtra)
+library(ggplot2)
+library(stringi)
+library(stringr)
+library(tmaptools)
+library(polycor)
+library(reshape2)
+library(wordcloud)
+library(wordcloud2)
+library(viridis)
+library(scales)
+library(magrittr)
+library(forcats)
+# library(highcharter)
+# library(maps)
+# library(ggmap)
+# library(ggpubr)
+# library(tidyverse)
+# library(plotly)
+```
+
+# 1. Descripción del dataset
+
+El dataset es un listado de ofertas de trabajo publicadas en Linkedin para ciencia de datos (término "Data Scientist") que fue obtenido en la primera parte de esta práctica.
+
+Se ha decidido la utilización de este dataset ya que se trata de un dataset propio que no ha sido ampliamente explotado a análisis y queríamos tener una experiencia más cercana a lo que sería un proyecto real. Se consiguen resultados y se llevan a cabo las técnicas que queríamos aplicar para obtener las respuestas a nuestras preguntas sobre el panorama de búsqueda de empleo.
+
+Se pueden ver los datos y el código en el siguiente repositorio: [https://github.com/InigoAB/DataCleaning](https://github.com/InigoAB/DataCleaning)
+
+Consta de 6 archivos CSV con las ofertas encontradas a nivel de Escocia, Reino Unido, España, Mundo y remoto que unificaremos, limpiaremos y daremos formato para posteriormente analizar y buscar información relevante.
+
+Trataremos de ir respondiendo a distintas preguntas que nos vayan durgiendo como pueden ser las siguientes:
+- ¿Qué variables son relevantes?
+- ¿Que diferencias hay segun la localizacion o paises?
+- ¿Es una opción los puestos en Remoto?
+- ¿Hay diferencias entre latitudes positivas y negativas?
+- ¿Existe correlación entre si hay quick application y si se trata de una empresa grande o no?
+- ¿Existe correlacion entre el tipo de puesto y el numero de solicitudes?
+- ¿Qué tipo de puestos de trabajo prioriza LinkedIn en sus resultados?
+- ¿Qué palabras son las más utilizadas en las descripciones de las ofertas de trabajo?
+
+
+# 2. Integración y selección de los datos de interés a analizar
+
+El primer paso es integrar los archivos de las distintas ubicaciones en un mismo dataframe con el que podamos trabajar.
+
+```{r}
+Scotland <- read.csv("data/Scotland.csv", header=TRUE, sep=",", stringsAsFactors=FALSE)
+Spain <- read.csv("data/Spain.csv", header=TRUE, sep=",", stringsAsFactors=FALSE)
+UK <- read.csv("data/UK.csv", header=TRUE, sep=",", stringsAsFactors=FALSE)
+WorldWide <- read.csv("data/WorldWide.csv", header=TRUE, sep=",", stringsAsFactors=FALSE)
+Remote <- read.csv("data/Remote.csv", header=TRUE, sep=",", stringsAsFactors=FALSE)
+Scotland$dataset <- "Scotland"
+Spain$dataset <- "Spain"
+UK$dataset <- "UK"
+WorldWide$dataset <- "WorldWide"
+Remote$dataset <- "Remote"
+jobs <- rbind(Scotland, Spain, UK, WorldWide, Remote)
+dim(jobs)
+```
+
+Obtenemos un dataframe de `r nrow(jobs)` observaciones y `r ncol(jobs)` variables. 
+
+Vemos las primeras observaciones del mismo.
+
+```{r}
+head(jobs)
+```
+
+Vamos a inspeccionar las variables.
+
+```{r}
+str(jobs)
+```
+
+Quitamos la primera columna ya que no es más que un índice que no aporta ninguna información.
+```{r}
+jobs$X <- NULL
+```
+
+Todas las demás variables han quedado como de tipo carácter así que en el siguiente apartado haremos las transformaciones necesarias, de momento las explicamos.
+
+## Explicación de las variables
+Nos quedamos con las siguientes columnas
+- Job_ID: identificador de la oferta de empleo 
+- Date: fecha de publicación
+- Company_Name: nombre de la empresa 
+- Role: título o puesto de la oferta
+- Location: ubicación del puesto
+- Description: descripción del puesto (del que se puede extraer más información)
+- Level: nivel de experiencia requerida para el puesto
+- Type: tipo de contrato (jornada completa o parcial)
+- Functions: funciones del puesto de la oferta
+- Industries: sectores que involucra
+- Solicitudes: número de solicitudes enviadas a la oferta
+- Empleados: intervalo/número de empleados de la empresa
+- Quick Application (True/False): método de solicitud rápida por LinkedIn Emails: e-mails de contacto
+- Visualizaciones: número de visualizaciones que tiene la oferta
+- Recommended Flavor: tipo de oferta
+- dataset: dataset de origen de cada variable
+
+
+# 3. Limpieza de los datos
+
+Al haber integrado varios archivos de búsquedas de ámbitos territoriales que se solapan lo primero es eliminar las posibles duplicidades que podamos encontrar.
+
+```{r}
+sum(duplicated(jobs[1:5]))
+```
+
+Hay `r sum(duplicated(jobs[1:5]))` observaciones duplicadas así que las eliminamos. Mantenemos los duplicados para preservar los valores de cada dataset y comparar posteriormente.
+
+```{r}
+
+jobs_with_duplicates <- jobs
+
+jobs <- jobs %>% 
+  distinct(Job.ID, Company.Name, Location, .keep_all = TRUE)
+```
+
+## 3.1. Valores perdidos
+
+Buscamos valores perdidos a lo largo del dataframe.
+
+```{r}
+sum(is.na(jobs))
+sum(jobs=="")
+sum(jobs=="None")
+```
+
+Sustituimos los valores en blanco y "None" por NA.
+
+```{r}
+jobs[jobs==""] <-- NA
+jobs[jobs=="None"] <-- NA
+jobs_with_duplicates[jobs_with_duplicates==""] <-- NA
+jobs_with_duplicates[jobs_with_duplicates=="None"] <-- NA
+```
+
+Para corregir los tipos de datos vamos a ver qué variables se podrían convertir a tipo factor viendo la cantidad de datos distintos que tiene cada una.
+
+```{r}
+sapply(jobs, function(x) length(unique(x)))
+```
+
+Todas las variables que tienen menos de 10 valores únicos las convertiremos a tipo factor. Date lo pasamos a formato fecha y Solicitudes y Visualizaciones a tipo numérico.
+
+```{r}
+jobs$Date <- as.Date(jobs$Date, format="%Y-%m-%d")
+jobs$Solicitudes <- as.numeric(jobs$Solicitudes)
+jobs$Visualizaciones <- as.numeric(jobs$Visualizaciones)
+jobs$Level <- as.factor(jobs$Level)
+jobs$Type <- as.factor(jobs$Type)
+jobs$Empleados <- as.factor(jobs$Empleados)
+jobs$Quick.Application <- as.factor(jobs$Quick.Application)
+jobs$Recommended.Flavor <- as.factor(jobs$Recommended.Flavor)
+jobs$dataset <- as.factor(jobs$dataset)
+
+jobs_with_duplicates$Date <- as.Date(jobs_with_duplicates$Date, format="%Y-%m-%d")
+jobs_with_duplicates$Solicitudes <- as.numeric(jobs_with_duplicates$Solicitudes)
+jobs_with_duplicates$Visualizaciones <- as.numeric(jobs_with_duplicates$Visualizaciones)
+jobs_with_duplicates$Level <- as.factor(jobs_with_duplicates$Level)
+jobs_with_duplicates$Type <- as.factor(jobs_with_duplicates$Type)
+jobs_with_duplicates$Empleados <- as.factor(jobs_with_duplicates$Empleados)
+jobs_with_duplicates$Quick.Application <- as.factor(jobs_with_duplicates$Quick.Application)
+jobs_with_duplicates$Recommended.Flavor <- as.factor(jobs_with_duplicates$Recommended.Flavor)
+jobs_with_duplicates$dataset <- as.factor(jobs_with_duplicates$dataset)
+
+summary(jobs)
+```
+
+Cambiamos los niveles para el tipo de jornada ya que la gran mayoría de ofertas son para jornada completa. Dejamos solo los niveles "Jornada completa" y "Otra jornada".
+
+```{r}
+Otra <- c("Contrato por obra", "Media jornada", "Otro", "Prácticas", "Temporal", "Voluntario")
+jobs <- jobs %>%
+  mutate(Type = fct_collapse(Type, "Otra jornada" = Otra))
+```
+
+Parece que los niveles de factor de Empleados no están ordenados de una forma coherente así que los ordenamos.
+```{r}
+levels(jobs$Empleados)
+```
+
+Los ordenamos.
+```{r}
+jobs$Empleados <- factor(jobs$Empleados, levels = c("2-10", "11-50", "51-200", "201-500", "501-1000", "1001-5000", "5001-10.000", "Más de 10.001"), exclude = NULL)
+```
+
+Mostramos la distribución de los valores perdidos.
+```{r warning=FALSE}
+sum(is.na(jobs))
+aggr(jobs, numbers=TRUE, sortVars=TRUE, labels=names(jobs),
+cex.axis=.7, gap=3, ylab=c("Missing data","Pattern"))
+```
+
+Tratamos los valores perdidos numéricos sustituyéndolos por la mediana.
+```{r}
+jobs <- jobs %>%
+  group_by(Level, Quick.Application) %>%
+    mutate(Solicitudes = ifelse(is.na(Solicitudes), median(Solicitudes, na.rm = TRUE), Solicitudes))
+jobs <- jobs %>%
+  group_by(Level, Quick.Application) %>%
+    mutate(Visualizaciones = ifelse(is.na(Visualizaciones), median(Visualizaciones, na.rm = TRUE), Visualizaciones))
+```
+
+Comprobamos cómo queda ahora la distribución de valores perdidos.
+```{r message=FALSE, warning=FALSE}
+sum(is.na(jobs))
+aggr(jobs, numbers=TRUE, sortVars=TRUE, labels=names(jobs),
+cex.axis=.7, gap=3, ylab=c("Missing data","Pattern"))
+```
+
+Los valores perdidos se han reducido bastante y los que quedan se dejan así porque será importante para posteriores análisis.
+
+## 3.2. Identificación y tratamiento de valores extremos
+
+Empezamos haciendo una visualización sencilla de las variables susceptibles de tener valores aislados.
+```{r message=FALSE, warning=FALSE}
+grid.arrange(
+  qplot(Date, data=jobs)+ theme(axis.text.x = element_text(angle = 25)),
+  qplot(Level, data=jobs)+ theme(axis.text.x = element_text(angle = 20, hjust=0.7, size = 7)),
+  qplot(Type, data=jobs)+ theme(axis.text.x = element_text(angle = 20, hjust=1)),
+  qplot(Solicitudes, data=jobs)+ theme(axis.text.x = element_text(angle = 25)),
+  qplot(Empleados, data=jobs)+ theme(axis.text.x = element_text(angle = 30, hjust=0.7, size = 7)),
+  qplot(Visualizaciones, data=jobs)+ theme(axis.text.x = element_text(angle = 25)),
+  qplot(Recommended.Flavor, data=jobs)+ theme(axis.text.x = element_text(angle = 30, hjust=0.7, size = 7))
+)
+```
+
+Hacemos un boxplot para cada una de las variables numéricas agrupándolas en función de la variable "Level" para así visualizar mejor los valores numéricos.
+```{r}
+ggplot(jobs, aes(x=Level, y=Solicitudes, color=Level)) + 
+  ggtitle("Diagrama de cajas de Solicitudes") + 
+  scale_color_brewer(palette="Dark2") +
+  geom_boxplot() +
+  theme(legend.position = "null") +
+  geom_jitter(width = 0.1)
+
+ggplot(jobs, aes(x=Level, y=Visualizaciones, color=Level)) + 
+  ggtitle("Diagrama de cajas de Visualizaciones") + 
+  scale_color_brewer(palette="Dark2") +
+  geom_boxplot() +
+  theme(legend.position = "null") +
+  geom_jitter(width = 0.1)
+```
+
+Como ya se veía por las gráficas anteriores son datos con colas muy largas a la derecha y algunos de los valores bastante aislados.
+
+Vamos a mirar los 5 valores más aislados de la variable "Solicitudes".
+```{r}
+tail(sort(boxplot.stats(jobs$Solicitudes)$out),5)
+```
+
+Vamos a observar las tres ofertas de trabajo que superan las 3000 solicitudes.
+
+```{r}
+jobs[which(jobs$Solicitudes %in% tail(sort(boxplot.stats(jobs$Solicitudes)$out),3)),]
+```
+
+Aunque sean valores extremos, observándolos en detalles parecen razonables y correctos así que los dejamos.
+
+# 4. Análisis de los datos.
+
+## 4.1. Selección de los grupos de datos que se quieren analizar/comparar (planificación de los análisis a aplicar)
+
+Para este apartado se realizaran los análsis sobre el dataframe "jobs". Se ha preferido mantener por separado dos dataframes ya que, de eliminar duplicados al mezclar los distintos archivos con sus localizaciones no se realizaría una correcta visualización. 
+
+El dataframe "jobs" es el que ha sido limpiado y manipulado previamente para poder realizar los análisis. En primer lugar será necesario encontrar la latitud y la longitud de cada una de las localizaciones. Esto será importante para evaluar posteriormente correlaciones entre variables y aplicar dos tipos de regresión (lineal y logística).
+
+Una vez se obtengan esas nuevas variables para la latitud y la longitud y se comprueben las condiciones de normalidad y homogeneidad se pasará a realizar una correlación de variables para entender dónde podríamos aplicar las regresiones.
+
+El modelo de regresión lineal pretenderá predecir el número de solicitudes respecto a la latitud, longitud y número de visualizaciones. Por otro lado, el modelo de regresión logística viene a predecir si se trata de la oferta cuenta con un enlace de solicitud rápida respecto al nivel de la oferta, el tipo de oferta, el número de solicitudes, el número de visualizaciones y la variable de tipo de ofertante.
+
+
+### 4.1.1 Preparación de los datos de Longitud y Latitud.
+
+En primer lugar se obtienen las dos nuevas variables haciendo uso de la API de OpenStreetMap. Se tienen en cuenta tan sólo estos dos valores aunque podríamos haber conseguido muchos más datos sobre una localización más precisa (ésto valdría para hacer análisis por localidades donde encontrar piso cercano al mayor número de puestos de trabajo por ejemplo).
+
+```{r}
+jobs$Location <- str_remove(jobs$Location, "^*y alrededores.*$")
+jobs$Location[which(jobs$Location == "Greater Barcelona Metropolitan Area")] <- "Barcelona"
+jobs$Location[which(jobs$Location == "Cracow, Lesser Poland District, Poland")] <- "Cracow, Poland"
+jobs$Location[which(jobs$Location == "New York City Metropolitan Area")] <- "New York"
+jobs$Location[which(jobs$Location == "Hong Kong, Hong Kong SAR")] <- "Hong Kong"
+jobs$Location[which(jobs$Location == "Burnaby (Maywood / Marlborough / Oakalla / Windsor), V5H, CA")] <- "Burnaby"
+jobs$Location[which(jobs$Location == "District Brno-City, Czech Republic")] <- "Czech Republic"
+jobs$Location[which(jobs$Location == "Silkeborg, Middle Jutland, Denmark")] <- "Denmark"
+jobs$Location[which(jobs$Location == "Prague, The Capital, Czech Republic")] <- "Prague"
+jobs$Location[which(jobs$Location == "Kuala Lumpur, Federal Territory of Kuala Lumpur, Malaysia")] <- "Malaysia"
+jobs$Location[which(jobs$Location == "Genève et périphérie")] <- "Genève"
+jobs$Location[which(jobs$Location == "Dallas-Fort Worth Metroplex")] <- "Dallas"
+jobs$Location[which(jobs$Location == "Raleigh-Durham-Chapel Hill Area")] <- "Raleigh"
+jobs$Location[which(jobs$Location == "Herzliyya, Tel Aviv, Israel")] <- "Herzliya"
+jobs$Location[which(jobs$Location == "New Territories, Hong Kong SAR")] <- "Hong Kong"
+jobs$Location[which(jobs$Location == "Des Moines Metropolitan Area")] <- "Des Moines"
+jobs$Location[which(jobs$Location == "Greater Minneapolis-St. Paul Area")] <- "Minneapolis"
+jobs$Location[which(jobs$Location == "Greater Munich Metropolitan Area")] <- "Munich"
+jobs$Location[which(jobs$Location == "Gurgaon Sub-District, Haryana, India")] <- "Gurgaon"
+jobs$Location[which(jobs$Location == "Village of Mayfield, OH, US")] <- "Cleveland"
+jobs$Location[which(jobs$Location == "Kraków i okolice")] <- "Kraków"
+
+jobs_with_duplicates$Location <- str_remove(jobs_with_duplicates$Location, "^*y alrededores.*$")
+jobs_with_duplicates$Location[which(jobs_with_duplicates$Location == "Greater Barcelona Metropolitan Area")] <- "Barcelona"
+jobs_with_duplicates$Location[which(jobs_with_duplicates$Location == "Cracow, Lesser Poland District, Poland")] <- "Cracow, Poland"
+jobs_with_duplicates$Location[which(jobs_with_duplicates$Location == "New York City Metropolitan Area")] <- "New York"
+jobs_with_duplicates$Location[which(jobs_with_duplicates$Location == "Hong Kong, Hong Kong SAR")] <- "Hong Kong"
+jobs_with_duplicates$Location[which(jobs_with_duplicates$Location == "Burnaby (Maywood / Marlborough / Oakalla / Windsor), V5H, CA")] <- "Burnaby"
+jobs_with_duplicates$Location[which(jobs_with_duplicates$Location == "District Brno-City, Czech Republic")] <- "Czech Republic"
+jobs_with_duplicates$Location[which(jobs_with_duplicates$Location == "Silkeborg, Middle Jutland, Denmark")] <- "Denmark"
+jobs_with_duplicates$Location[which(jobs_with_duplicates$Location == "Prague, The Capital, Czech Republic")] <- "Prague"
+jobs_with_duplicates$Location[which(jobs_with_duplicates$Location == "Kuala Lumpur, Federal Territory of Kuala Lumpur, Malaysia")] <- "Malaysia"
+jobs_with_duplicates$Location[which(jobs_with_duplicates$Location == "Genève et périphérie")] <- "Genève"
+jobs_with_duplicates$Location[which(jobs_with_duplicates$Location == "Dallas-Fort Worth Metroplex")] <- "Dallas"
+jobs_with_duplicates$Location[which(jobs_with_duplicates$Location == "Raleigh-Durham-Chapel Hill Area")] <- "Raleigh"
+jobs_with_duplicates$Location[which(jobs_with_duplicates$Location == "Herzliyya, Tel Aviv, Israel")] <- "Herzliya"
+jobs_with_duplicates$Location[which(jobs_with_duplicates$Location == "New Territories, Hong Kong SAR")] <- "Hong Kong"
+jobs_with_duplicates$Location[which(jobs_with_duplicates$Location == "Des Moines Metropolitan Area")] <- "Des Moines"
+jobs_with_duplicates$Location[which(jobs_with_duplicates$Location == "Greater Minneapolis-St. Paul Area")] <- "Minneapolis"
+jobs_with_duplicates$Location[which(jobs_with_duplicates$Location == "Greater Munich Metropolitan Area")] <- "Munich"
+jobs_with_duplicates$Location[which(jobs_with_duplicates$Location == "Gurgaon Sub-District, Haryana, India")] <- "Gurgaon"
+jobs_with_duplicates$Location[which(jobs_with_duplicates$Location == "Village of Mayfield, OH, US")] <- "Cleveland"
+jobs_with_duplicates$Location[which(jobs_with_duplicates$Location == "Kraków i okolice")] <- "Kraków"
+
+OSM_jobs <- geocode_OSM(jobs$Location, details = TRUE, as.data.frame = TRUE)
+jobs_merged<-merge(x=jobs,y=OSM_jobs[2:3], by = 0, all= TRUE)
+
+write.csv(jobs_merged,"jobs_merged.csv")
+
+OSM_jobs_duplicates <- geocode_OSM(jobs_with_duplicates$Location, details = TRUE, as.data.frame = TRUE)
+jobs_merged_with_duplicates<-merge(x=jobs_with_duplicates,y=OSM_jobs_duplicates[2:3], by = 0, all= TRUE)
+
+write.csv(jobs_merged_with_duplicates,"jobs_merged_with_duplicates.csv")
+
+head(OSM_jobs)
+head(jobs_merged)
+```
+
+## 4.2. Comprobación de la normalidad y homogeneidad de la varianza.
+
+En el dataset se obtienen 19 variables. En este apartado se busca verificar si las variables numéricas (lat, lon, Solicitudes y Visualizaciones) siguen una distribución normal.
+
+Para verificarlo, primero se realizará un estudio visual de la normalidad mediante la gráfica quantile-quantile (Q-Q) que dibuja la correlación entre una muestra dada y la distribución normal. En esta primera gráfica se podrá observar el grado de aproximación o similitud con la línea de referencia de 45 grados. Además, también se realizará el estudio visual sobre el histograma de la variable
+
+```{r}
+
+par(mfrow=c(2,2))
+for(i in 1:ncol(jobs_merged)) {
+  if (is.numeric(jobs_merged[,i])){
+    qqnorm(jobs_merged[,i],main = paste("Normal Q-Q Plot for ",colnames(jobs_merged)[i]))
+    qqline(jobs_merged[,i],col="red")
+    hist(jobs_merged[,i],
+      main=paste("Histogram for ", colnames(jobs_merged)[i]),
+      xlab=colnames(jobs_merged)[i], freq = FALSE)
+  }
+}
+
+```
+
+No parece que las gráficas representen que claramente las variables siguen una distribución normal. Para verificarlo, a continuación se realiza la comprobación mediante el test de Shapiro-Wilk y así no dar lugar a errores.
+
+```{r}
+
+for(i in 1:ncol(jobs_merged)) {
+  if (is.numeric(jobs_merged[,i])){
+    result <- shapiro.test(jobs_merged[,i])
+    print(paste("Resultados para: ", colnames(jobs_merged)[i]))
+    print(result)
+  }
+}
+```
+
+Se puede observar que a través de los test aplicados a las variables cuantitativas, el p-value es menor que 0.05, por lo que se deberá rechazar la hipótesis nula y aceptar que las variables no siguen una distribución normal. Por lo tanto, se deberán utlizar métodos para el análisis que no supongan que las variables cuantitativas siguen una distribución normal.
+
+No obstante, cuando el número de observaciones es mayor o igual a 30, como es el caso de estas variables cuantitativas y debido al teorema central del límite, se podrán utilizar pruebas paramétricas asumiendo que con un aumento de observaciones, la distribución se volvería normal y en forma de campana. Así las variables se podrían aproximar como una distribución normal de media 0 y desviación estándar 1.
+
+A continuación, se lleva a cabo la comprobación de homogeneidad de las varianzas. Se utilizará el test de Flinge-Killneen que resulta apropiado para variables no paramétricas que no siguen una distribución normal.
+
+```{r}
+
+fligner.test(Visualizaciones ~ lat, jobs_merged)
+fligner.test(Visualizaciones ~ lon, jobs_merged)
+fligner.test(Solicitudes ~ lat, jobs_merged)
+fligner.test(Solicitudes ~ lon, jobs_merged)
+fligner.test(Visualizaciones ~ Solicitudes, jobs_merged)
+
+```
+
+Se obtiene como resultado que las variables numéricas no son homogéneas según su varianza ya que en todos estos test se consigue un p-value menor de 0.05. Se deberá tener en cuenta para la aplicación de métodos analíticos que asuman homogeneidad de las varianzas.
+
+## 4.3 Aplicación de pruebas estadísticas para comparar los grupos de datos.
+
+En función de los datos y el objetivo del estudio, aplicar pruebas de contraste de hipótesis, correlaciones, regresiones, etc. Aplicar al menos tres métodos de análisis diferentes.
+
+### 4.3.1 Correlaciones.
+
+En primer lugar, se analizan las posibles relaciones entre las variables.
+
+```{r}
+
+borrar <- c("Date","Row.names")
+jobs_corr <- jobs_merged[ , !(names(jobs_merged) %in% borrar)]
+
+corr_matrix<-hetcor(jobs_corr, ML=FALSE, std.err=FALSE)
+corr_matrix$correlations
+
+ggplot(
+  melt(corr_matrix$correlations),
+  aes(Var2, Var1, fill = value)
+)+
+geom_tile(color = "white")+
+scale_fill_gradient2(
+  low = "blue",
+  high = "red",
+  mid = "white",
+  midpoint = 0,
+  limit = c(-1,1),
+  space = "Lab",
+  name="Correlation") +
+theme_minimal()+ # minimal theme
+theme(
+  axis.text.x = element_text(
+  angle = 45, vjust = 1,
+  size = 12, hjust = 1))+
+coord_fixed()
+
+```
+
+Se observa que:
+
+- Tal y como era de suponer, existe una fuerte relación entre la variable Solicitudes y Visualizaciones.
+- También existe fuerte relación entre el númnero de solicitudes y visualizaciones con el tipo de oferta. Esto tiene sentido, posteriormente se verá como quedaría reflejada la distribución según cada una de las categorías.
+- Hay una relación interesante entre si la oferta tiene enlace de aplicación rápida y el número de solicitudes, visualizaciones y número de empleados.
+
+### 4.3.2 Modelo de regresión lineal
+
+Entendiendo las distintas variables que pueden formar un buen modelo se decide la aplicación de un modelo de regresión lineal en el que se pueda predecir el número de solicitudes respecto al número de personas que lo hayan visualizado y de su localización.
+
+```{r}
+
+remote_lat_positive<-jobs_merged[which(jobs_merged$lat>0),]
+ntrain <- nrow(remote_lat_positive)*0.8
+ntest <- nrow(remote_lat_positive)*0.2
+set.seed(12312)
+index_train<-sample(1:nrow(remote_lat_positive),size = ntrain)
+train<-remote_lat_positive[index_train,]
+test<-remote_lat_positive[-index_train,]
+modelo<-lm(formula = Solicitudes ~ lat + lon + Visualizaciones, data=train)
+summary(modelo)
+
+prob_sl<-predict(modelo, test, type="response")
+mc_sl<-data.frame(
+  real=test$Solicitudes,
+  predicted= prob_sl,
+  dif=ifelse(test$Solicitudes>prob_sl, -prob_sl*100/test$Solicitudes,prob_sl*100/test$Solicitudes)
+  )
+colnames(mc_sl)<-c("Real","Predecido","Dif%")
+knitr::kable(mc_sl)
+
+# Predicción
+
+newdata <- data.frame(
+  lat = 50,
+  lon = 4,
+  Visualizaciones = 300
+)
+
+# Predecir el número de solicitudes respecto a la latitud, longitud y el número de visualizaciones.
+predict(modelo, newdata)
+
+```
+
+Se obtiene un modelo con un coeficiente de R^2 ajustado en torno al 80%. Se trata de un valor aceptable.
+
+La tabla tambien representa las diferencias entre los valores reales y predecidos. Algunos de ellos incluso son tomados como número negativos, esto refleja que el modelo podría ser mejorado teniendo en cuenta otras nuevas variables.
+
+## 4.3.3 Modelo de Regresión logística
+
+Hacemos un modelo de regresión logística con el que poder predecir si una oferta dispondrá de un sistema rápido para mandar la candidatura "Quick.Application".
+
+```{r}
+lgm <- glm(formula = Quick.Application ~ Level + Type + Solicitudes + Visualizaciones + Recommended.Flavor, family = binomial(link=logit), data = jobs)
+summary(lgm)
+```
+
+Este es el resumen del modelo y para la matriz de confusion:
+
+```{r 3.3.3.1}
+predicciones <- ifelse(test = lgm$fitted.values >= 0.5, yes = ">50%", no = "<50%")
+matriz_confusion <- table(lgm$model$Quick.Application, predicciones,
+                          dnn = c("observaciones", "predicciones"))
+matriz_confusion
+```
+
+```{r}
+library(vcd)
+mosaic(matriz_confusion, shade = T, colorize = T,
+       gp = gpar(fill = matrix(c("green3", "red2", "red2", "green3"), 2, 2)))
+```
+
+Podemos ver que hay `r matriz_confusion[3]` falsos positivos y `r matriz_confusion[2]` falsos negativos.
+
+```{r}
+sensibilidad <- label_percent(accuracy = 0.01)(matriz_confusion[4]/(matriz_confusion[4]+matriz_confusion[2]))
+especificidad <- label_percent(accuracy = 0.01)(matriz_confusion[1]/(matriz_confusion[1]+matriz_confusion[3]))
+cat("sensibilidad: ",  sensibilidad)
+cat("\nespecificidad: ", especificidad)
+```
+
+La sensibilidad es del `r sensibilidad` y la especificidad del `r especificidad`.
+
+```{r}
+library(pROC)
+prob=predict(lgm, newdata=jobs, type="response")
+r=roc(response=jobs$Quick.Application, predictor=prob, data=data)
+plot (r)
+auc(r)
+```
+
+El modelo obtenido es bastante bueno ya que cuenta con un AUC de `r auc(r)` y con una sensibilidad y especificidad aceptables por lo que se puede decir que se puede determinar si habrá Quick.Application en función de la oferta.
+
+# 5. Representación de los resultados a partir de las tablas y gráficas.
+
+A continuación la idea es obtener una representación de los resultados según la localización y las distintas variables para poder encontrar patrones interesantes. Como se ha podido comprobar en apartados anteriores, parece que hay una diferencia notable entre latitudes positivas y negativas. En cuanto a la variable longitud también cabe destacar que cobra especial importancia sobre todo suponiendo que para ciertas longitudes significará grupo de países como Europa, América y Asia y también hay océanos y mares entre ellos.
+
+# 5.1 Principales diferencias.
+
+```{r}
+
+jobs_with_duplicates %>% 
+  group_by(dataset) %>% 
+  count(Level) %>%
+  mutate(freq = round(n / sum(n) * 100, 0)) %>% 
+  ggplot(mapping = aes(y = n, x = dataset, color=Level, fill=Level)) + geom_bar( stat="identity") + geom_text(aes(label = paste(freq, "%")), color="black") + facet_wrap(~Level)+ theme(axis.text.x = element_text(angle = 55, hjust=1))
+
+jobs_with_duplicates %>% 
+  group_by(dataset) %>% 
+  count(Type) %>%
+  mutate(freq = round(n / sum(n) * 100, 0)) %>% 
+  ggplot(mapping = aes(y = n, x = dataset, color=Type, fill=Type)) + geom_bar( stat="identity") + geom_text(aes(label = paste(freq, "%")), color="black") + facet_wrap(~Type)+ theme(axis.text.x = element_text(angle = 55, hjust=1))
+
+jobs_with_duplicates %>% 
+  group_by(dataset) %>% 
+  count(Quick.Application) %>%
+  mutate(freq = round(n / sum(n) * 100, 0)) %>% 
+  ggplot(mapping = aes(y = n, x = dataset, color=Quick.Application, fill=Quick.Application)) + geom_bar( stat="identity") + geom_text(aes(label = paste(freq, "%")), color="black") + facet_wrap(~Quick.Application)+ theme(axis.text.x = element_text(angle = 55, hjust=1))
+
+jobs_with_duplicates %>% 
+  group_by(dataset) %>% 
+  count(Empleados) %>%
+  mutate(freq = round(n / sum(n) * 100, 0)) %>% 
+  ggplot(mapping = aes(y = n, x = dataset, color=Empleados, fill=Empleados)) + geom_bar( stat="identity") + geom_text(aes(label = paste(freq, "%")), color="black") + facet_wrap(~Empleados)+ theme(axis.text.x = element_text(angle = 55, hjust=1))
+
+```
+
+
+## 5.2 Mapas por localización y a nivel global
+
+En este caso lo interesante será ver las distribuciones de las ofertas según los distintos mapas.
+
+```{r}
+
+NI_world <- map_data("world")
+
+p_world <- jobs_merged_with_duplicates %>%
+  ggplot() +
+    geom_polygon(data = NI_world, aes(x=long, y = lat, group = group), fill="grey", alpha=0.3) +
+    geom_count(aes(x=lon, y=lat)) +
+    scale_size_continuous(range=c(0.01,3)) +
+    scale_color_viridis(option="inferno") +
+    theme_void() +
+    coord_map() +
+    theme(legend.position = "none")
+p_world
+
+p_remote <- jobs_merged_with_duplicates[which(jobs_merged_with_duplicates$dataset=="Remote"),] %>%
+  ggplot() +
+    geom_polygon(data = NI_world, aes(x=long, y = lat, group = group), fill="grey", alpha=0.3) +
+    geom_count(aes(x=lon, y=lat)) +
+    scale_size_continuous(range=c(0.01,3)) +
+    scale_color_viridis(option="inferno") +
+    theme_void() +
+    coord_map() +
+    theme(legend.position = "none")
+p_remote
+
+NI_uk <- map_data("world") %>%
+  filter(region == "UK")
+p_uk <- jobs_merged_with_duplicates[which(jobs_merged_with_duplicates$dataset=="UK"),] %>%
+  ggplot() +
+    geom_polygon(data = NI_uk, aes(x=long, y = lat, group = group), fill="grey", alpha=0.3) +
+    geom_count(aes(x=lon, y=lat)) +
+    scale_size_continuous(range=c(1,7)) +
+    scale_color_viridis(option="inferno") +
+    theme_void() +
+    coord_fixed(ratio = 1.3, 
+              xlim = c(-10,3), 
+              ylim = c(50, 59)) +
+    theme(legend.position = "none")
+p_uk
+
+NI_scotland <- map_data("world") %>%
+  filter(region == "UK")
+p_scotland <- jobs_merged_with_duplicates[which(jobs_merged_with_duplicates$dataset=="Scotland"),] %>%
+  ggplot() +
+    geom_polygon(data = NI_scotland, aes(x=long, y = lat, group = group), fill="grey", alpha=0.3) +
+    geom_count(aes(x=lon, y=lat)) +
+    scale_size_continuous(range=c(1,7)) +
+    scale_color_viridis(option="inferno") +
+    theme_void() +
+    coord_fixed(ratio = 1.3, 
+              xlim = c(-10,3), 
+              ylim = c(50, 59)) +
+    theme(legend.position = "none")
+p_scotland
+
+NI_spain <- map_data("world") %>%
+  filter(region == "Spain")
+p_spain <- jobs_merged_with_duplicates[which(jobs_merged_with_duplicates$dataset=="Spain"),] %>%
+  ggplot() +
+    geom_polygon(data = NI_spain, aes(x=long, y = lat, group = group), fill="grey", alpha=0.3) +
+    geom_count(aes(x=lon, y=lat)) +
+    scale_size_continuous(range=c(1,15)) +
+    scale_color_viridis(option="inferno") +
+    theme_void() +
+    ylim(35,45) +
+    coord_map() +
+    theme(legend.position = "none")
+p_spain
+
+```
+
+Se puede observar las grandes potencias y ciudades que obtienen el mayor número de ofertas en el portal de trabajo. Esto resulta interesante para poder decidir en qué ciudades enfocarse y sobre todo, comprobar en qué lugares se puede optar por el teletrabajo respecto a otras.
+
+## 5.3 Patrones de publicación de trabajos por fecha
+
+A continuación se realiza una representación de las fechas obtenidas en cada localización observando un claro patrón semanal. Esto es interesante para conocer cuándo son publicadas el mayor número de ofertas.
+
+```{r}
+
+jobs_date_pattern <- jobs_merged_with_duplicates
+
+jobs_date_pattern <- jobs_date_pattern %>%
+  filter(Date >= "2020-10-01")
+
+nrow(jobs_date_pattern)
+
+hist(jobs_date_pattern$Date,"days")
+
+hist(jobs_date_pattern[which(jobs_date_pattern$dataset=="Spain"),"Date"],"days")
+hist(jobs_date_pattern[which(jobs_date_pattern$dataset=="UK"),"Date"],"days")
+hist(jobs_date_pattern[which(jobs_date_pattern$dataset=="Scotland"),"Date"],"days")
+hist(jobs_date_pattern[which(jobs_date_pattern$dataset=="WorldWide"),"Date"],"days")
+hist(jobs_date_pattern[which(jobs_date_pattern$dataset=="Remote"),"Date"],"days")
+```
+
+Se observa un dato interesante en algunas de estas gráficas en torno al 12 de Octubre que coincide con el día de la Hispanidad. Puede ser que estos días sean aprovechados por las empresas y agencias para realizar un mayor número de ofertas. Obtenemos esa información de valor para el futuro. Será interesante chequear el portal de empleo en torno a las fechas de fiestas nacionales.
+
+## 5.4 Nube de palabras más usadas en UK
+
+Por último se realiza otra de las representaciones que consideramos de gran importancia para evaluar que herramientas o lenguajes son más solicitados en las descripciones de los puestos de trabajo. En este caso se decide utilizar una única localización por el idioma.
+
+```{r}
+
+UK$Description <- gsub(",", "", UK$Description, fixed = TRUE)
+UK$Description <- gsub(".", "", UK$Description, fixed = TRUE)
+UK$Description <- gsub("/", "", UK$Description, fixed = TRUE)
+
+df1 <- data.frame(table(unlist(strsplit(tolower(UK$Description), " "))))
+
+borrar <- c("and"," ","","to","the","of","a","in","with","for","you","our","is","as","we","on","or","are","be","will","an","your","work","working","that","this","have","at","their","role","from","skills","by","looking","what","–","can","all","across","they","who","such","new","more","if","through","&","any","when","well","us","uk","take","not","also","these","there","get","(eg","while","so","further","per","youll","using","based","including","within","where","has","when","able","it","other","it´s","than","we’re","we're","we’ve","we’ll","we've","we’d","style='font-weight:","we'll","we'd","(we","about","many","you’ll","you'll","you’re","you're","you?","you!","you’d","you’ve","you've","you'd","them","out","over","may","been","here","those","do","one","but","into","must","just","its","etc","some","no","should","every","-","then","come","each","*","	+")
+df1 <- df1[!(df1$Var1 %in% borrar),]
+
+set.seed(1234)
+
+wordcloud(words = df1$Var1, freq = df1$Freq, min.freq = 1, max.words=200, random.order=FALSE, rot.per=0.35, colors=brewer.pal(8,"Dark2"))
+
+word_dataframe <- df1[order(-df1$Freq),]
+
+wordcloud2(data=word_dataframe[2:400,], size=1.6, color='random-dark')
+
+word_dataframe[1:25,]
+```
+
+Entre los lenguajes de programación, herramientas y plataformas/servicios cabe destacar estas coincidencias:
+
+- R: 223 coincidencias
+- SQL: 451 coincidencias
+- AI: 308 coincidencias
+- Python: 708 coincidencias
+- BI: 136 coincidencias
+- ETL: 183 coincidencias
+- ML: 236 coincidencias
+- Design: 881 coincidencias
+- Azure: 225 coincidencias
+- Cloud: 473 coincidencias
+- AWS: 258 coincidencias
+
+Lugares como:
+- London: 371 coincidencias
+- home: 152 coincidencias
+- remote: 176 coincidencias
+
+En UK podríamos entender entonces en mayor profundidad si realmente 176 ofertas en remoto nos parecen suficientes respecto a otras localizaciones.
+
+# 6. Resolución del problema. Conclusiones.
+
+Estas serían las respuestas a las preguntas inicialmente hechas:
+
+- ¿Qué variables son relevantes?
+
+Si una oferta permite el trabajo en remoto. La localización de la oferta. El tipo de oferta. Las herramientas o lenguajes de programación más usados. El número de Solicitudes, Visualizaciones y si tiene enlace de aplicación rápida o no. A final, lo importante es entender si una oferta según el tipo de oferta o empresa será posiblemente muy solicitada o no. También es muy importante el nivel pedido.
+
+- ¿Que diferencias hay segun la localización o paises?
+
+Se puede afirmar que a latitudes positivas y por grupos de longitud haciendo referencia a grupo de países como grandes potencias son lugares donde más oportunidades laborales hay. Es algo obvio que en ciudades grandes hay un mayor número de ofertas, pero podemos ver que por ejemplo, Londres podría ser una ciudad europea interesante para un científico de datos.
+
+- ¿Es una opción los puestos en Remoto?
+
+No hay evidencia de que el Remoto sea una opción más allá de la situación de alarma social actual. Aún hay muchos puestos de trabajo que no permiten esta modalidad aunque se puede comprobar que según el tipo de oferta y localización dependerá mucho si hay opciones para el teletrabajo.
+
+- ¿Hay diferencias entre latitudes positivas y negativas?
+
+Si, existen diferencias a diferentes latitudes. También cabe destacar que en el ecuadro con latitud 0, a penas hay opciones.
+
+- ¿Existe correlación entre si hay quick application y si se trata de una empresa grande o no?
+
+Si, influye el númnero de empleados con la posibilidad de tener un enlace de aplicación rápida.
+
+- ¿Existe correlación entre el tipo de puesto y el número de solicitudes?
+
+Si, existe una relación directa entre el tipo de oferta y el número de solicitudes que reciben.
+
+- ¿Qué tipo de puestos de trabajo prioriza LinkedIn en sus resultados?
+
+Esta es una de las preguntas más interesantes que hemos podido constatar. Pues según el número total de ofertas en todo el mundo, será limitado, y en este caso, LinkedIn reflejará ofertas de trabajo más cercanas. Esto es porque existe una diferencia notable entre los resultados obtenidos en UK y US respecto al número total de ofertas que se pueden encontrar en la plataforma y con la limitación que nos encontramos al hacer web scraping. Esto no quiere decir que no se hayan podido obtener respuestas globales, pero si que claramente la localización del perfil influirá en que no se mostrarán ofertas aleatorias de todo el mundo.
+
+- ¿Qué palabras son las más utilizadas en las descripciones de las ofertas de trabajo?
+
+Para una localización como ha sido el caso de UK podemos observar como "team" y "research" han sido dos de las más repedidas. Sin tener en cuenta otras palabras como "data", que claramente sería la más utilizada con diferencia.
