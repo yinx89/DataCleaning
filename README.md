@@ -22,3 +22,16 @@ En este espacio presentamos la segunda práctica de la asignatura "Tipología y 
     - jobs_merged.csv: dataframe con los datos limpios y tratados
     - jobs_merged_with_duplicates.csv: dataframe con los datos duplicados
 * data_cleaning_files: archivos, figuras y tablas generadas al renderizar
+
+### Uso únicamente académico
+Este software ha sido creado con fines única y exclusivamente académicos. Los autores no son responsables del uso malintencionado de terceros.
+
+### Licencia
+El repositorio está protegido por copyright con todos los derechos de autor reservados, sin concesión de licencia de uso, por lo que no se permite su difusión, manipulación o uso de ningún tipo sin la autorización expresa de los autores.
+
+
+Copyright (C) Ginés Molina e Iñigo Álvarez - All Rights Reserved
+
+Unauthorized copying of this repository, via any medium is strictly prohibited
+
+Proprietary and confidential
